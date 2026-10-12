@@ -12,49 +12,33 @@ ML-щикам этот файл менять не нужно: они работ�
 from concurrent.futures import ThreadPoolExecutor
 
 from backend.pipeline import extract_fields, answer_question
+from backend.db import insert_job, get_job, update_job
 
 # Один рабочий => задачи идут строго по очереди
 # (нужно больше параллели - увеличить max_workers, но тяжёлые модели на CPU лучше по одной)
 executor = ThreadPoolExecutor(max_workers=1)
 
-# Хранилище задач: ключ - job_id, значение - словарь с данными
-JOBS: dict[str, dict] = {} # при перезапуске сервера пустеет.
-
 
 def create_job(job_id: str, path: str, filename: str, doc_type: str, question: str) -> None:
-    """Создаёт запись о задаче в JOBS и ставит её в очередь на обработку."""
-    JOBS[job_id] = {
-        "job_id": job_id,
-        "filename": filename, # Исходное имя файла, которое загрузил студент
-        "doc_type": doc_type, # Тип документа, из списка DOC_TYPES в main.py.
-        "question": question, # Вопрос студента
-        "path": path, # Путь к сохранённому фото на диске. По нему extract_fields открывает файл.
-        "status": "queued", # "processing" → "done" или "error"
-        "progress": 0, # проценты для прогресс-бара
-        "fields": None, # словарь с полями, распознанными на документе (ФИО, даты, номер и так далее). Заполняет extract_fields
-        "result": None, # итоговый ответ на вопрос с цитатой из правил. Заполняет answer_question
-        "error": None, # текст ошибки
-    }
+    """Записывает задачу в базу и ставит её в очередь на обработку."""
+    insert_job(job_id, path, filename, doc_type, question)
     executor.submit(_run, job_id)  # поставить в очередь
 
 
 def _run(job_id: str) -> None:
     """Обрабатывает одну задачу в фоне: сначала OCR (extract_fields), потом ответ по Положению (answer_question)."""
-    job = JOBS[job_id]
+    job = get_job(job_id)  # свежая запись из базы: нужны путь, тип документа и вопрос
     try:
-        job["status"] = "processing"
-        job["progress"] = 10
+        update_job(job_id, status="processing", progress=10)
 
         # Шаг 1: OCR (функция из pipeline.py)
-        job["fields"] = extract_fields(job["path"], job["doc_type"])
-        job["progress"] = 60
+        fields = extract_fields(job["path"], job["doc_type"])
+        update_job(job_id, fields=fields, progress=60)
 
         # Шаг 2: ответ по Положению (функция из pipeline.py)
-        job["result"] = answer_question(job["fields"], job["doc_type"], job["question"])
-        job["progress"] = 100
-        job["status"] = "done"
+        result = answer_question(fields, job["doc_type"], job["question"])
+        update_job(job_id, result=result, progress=100, status="done")
     except Exception as e:
         # Любая ошибка внутри pipeline.py не ломает очередь: задача получает статус error,
         # а страница покажет текст ошибки. Остальные задачи идут дальше.
-        job["status"] = "error"
-        job["error"] = str(e)
+        update_job(job_id, status="error", error=str(e))
