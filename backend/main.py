@@ -19,12 +19,14 @@
 """
 import uuid
 from pathlib import Path
-from backend.jobs import create_job, JOBS
+from backend.jobs import create_job
+from backend.db import init_db, get_job, list_jobs
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 
 app = FastAPI()
 
+init_db()
 # Куда сохраняем загруженные фото (папка data/ есть в .gitignore, в git не попадает)
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -75,15 +77,15 @@ def _public(job: dict) -> dict:
 
 
 @app.get("/jobs/{job_id}")
-def get_job(job_id: str):
-    """Возвращает статус и результат одной задачи по её job_id."""
-    job = JOBS.get(job_id)
+def job_status(job_id: str):
+    """Возвращает статус и результат одной задачи (404, если такой нет)."""
+    job = get_job(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(404, "Задача не найдена")
     return _public(job)
 
 
 @app.get("/jobs")
-def list_jobs():
-    """Возвращает все задачи списком (для ручной проверки очереди через /docs)."""
-    return [_public(j) for j in JOBS.values()]
+def all_jobs():
+    """Возвращает список всех задач."""
+    return [_public(j) for j in list_jobs()]
