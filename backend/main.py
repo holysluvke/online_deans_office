@@ -21,12 +21,15 @@ import uuid
 from pathlib import Path
 from backend.jobs import create_job
 from backend.db import init_db, get_job, list_jobs
+from backend.jobs import create_job, restore_queue
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 
 app = FastAPI()
 
 init_db()
+restore_queue()
+
 # Куда сохраняем загруженные фото (папка data/ есть в .gitignore, в git не попадает)
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

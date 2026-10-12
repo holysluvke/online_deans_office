@@ -72,3 +72,12 @@ def update_job(job_id: str, **changes) -> None:
     columns = ", ".join(f"{name} = ?" for name in changes)
     with get_conn() as conn:
         conn.execute(f"UPDATE jobs SET {columns} WHERE job_id = ?", (*changes.values(), job_id))
+
+
+def get_unfinished_jobs() -> list[dict]:
+    """Возвращает задачи, которые не успели завершиться (в очереди или в обработке), старые первыми."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE status IN ('queued', 'processing') ORDER BY rowid"
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]

@@ -12,7 +12,8 @@ ML-щикам этот файл менять не нужно: они работ�
 from concurrent.futures import ThreadPoolExecutor
 
 from backend.pipeline import extract_fields, answer_question
-from backend.db import insert_job, get_job, update_job
+from backend.db import insert_job, get_job, update_job, get_unfinished_jobs
+
 
 # Один рабочий => задачи идут строго по очереди
 # (нужно больше параллели - увеличить max_workers, но тяжёлые модели на CPU лучше по одной)
@@ -23,6 +24,13 @@ def create_job(job_id: str, path: str, filename: str, doc_type: str, question: s
     """Записывает задачу в базу и ставит её в очередь на обработку."""
     insert_job(job_id, path, filename, doc_type, question)
     executor.submit(_run, job_id)  # поставить в очередь
+
+
+def restore_queue() -> None:
+    """При старте сервера возвращает в очередь задачи, которые прервал перезапуск."""
+    for job in get_unfinished_jobs():
+        update_job(job["job_id"], status="queued", progress=0)  # processing -> queued, начинаем заново
+        executor.submit(_run, job["job_id"])
 
 
 def _run(job_id: str) -> None:
