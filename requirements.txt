@@ -3,3 +3,12 @@ uvicorn
 python-multipart
 streamlit>=1.46
 requests
+
+# OCR (backend/ocr). paddlepaddle 3.3.0 на CPU ломает модели PaddleOCR, поэтому 3.2.2
+paddlepaddle==3.2.2
+paddleocr>=3.7,<3.8
+pypdfium2
+pillow
+numpy
+
+pytest
