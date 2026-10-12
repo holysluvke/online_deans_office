@@ -81,3 +81,11 @@ def get_unfinished_jobs() -> list[dict]:
             "SELECT * FROM jobs WHERE status IN ('queued', 'processing') ORDER BY rowid"
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
+
+def delete_finished_jobs() -> list[str]:
+    """Удаляет из базы завершённые задачи (done/error) и возвращает пути к их фото."""
+    with get_conn() as conn:
+        paths = [r["path"] for r in conn.execute(
+            "SELECT path FROM jobs WHERE status IN ('done', 'error')")]
+        conn.execute("DELETE FROM jobs WHERE status IN ('done', 'error')")
+    return paths

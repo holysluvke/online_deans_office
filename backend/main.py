@@ -16,11 +16,12 @@
     POST /documents      принять фото + тип документа + вопрос, поставить в очередь
     GET  /jobs/{job_id}  статус и результат одной задачи (страница опрашивает его каждые 2 с)
     GET  /jobs           список всех задач
+    DELETE /jobs         удалить завершённые задачи и их фото
 """
 import uuid
 from pathlib import Path
 from backend.jobs import create_job
-from backend.db import init_db, get_job, list_jobs
+from backend.db import init_db, get_job, list_jobs, delete_finished_jobs
 from backend.jobs import create_job, restore_queue
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
@@ -92,3 +93,10 @@ def job_status(job_id: str):
 def all_jobs():
     """Возвращает список всех задач."""
     return [_public(j) for j in list_jobs()]
+
+@app.delete("/jobs")
+def clear_jobs():
+    """Удаляет завершённые задачи вместе с их фото; задачи в работе не трогает."""
+    for path in delete_finished_jobs():
+        Path(path).unlink(missing_ok=True)  # удалить файл с диска, если он ещё есть
+    return {"status": "ok"}

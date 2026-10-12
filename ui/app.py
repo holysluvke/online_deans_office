@@ -3,6 +3,9 @@ import streamlit as st
 from style import render_header
 import html
 
+# Сколько последних задач показывать на странице (старые остаются в базе)
+MAX_SHOWN = 20
+
 API = "http://127.0.0.1:8000"
 
 DOC_TYPES = {
@@ -28,10 +31,6 @@ st.set_page_config(page_title="Онлайн-деканат", page_icon="🎓")
 
 render_header()
 
-# Память между перезапусками страницы: список номеров наших задач
-if "job_ids" not in st.session_state:
-    st.session_state.job_ids = []
-
 # ---------- Блок 1: загрузка ----------
 st.subheader("1. Загрузите документ")
 
@@ -55,9 +54,8 @@ if st.button("Отправить на проверку", type="primary", disable
         except requests.RequestException:
             st.error("Не удалось связаться с сервером. Запущен ли uvicorn?")
             break
-        if resp.ok:
-            st.session_state.job_ids.append(resp.json()["job_id"])
-        else:
+        if not resp.ok:
+            # Бэкенд отклонил файл (например, не картинка): показываем его причину
             st.error(f"{f.name}: {resp.json().get('detail')}")
 
 # ---------- Блок 2: очередь и результаты ----------
@@ -85,17 +83,18 @@ def show_result(job: dict) -> None:
 
 @st.fragment(run_every=2)  # этот кусок сам обновляется каждые 2 секунды
 def queue_view() -> None:
-    """Блок очереди: раз в 2 секунды запрашивает статус каждой задачи у бэкенда и рисует карточки."""
-    if not st.session_state.job_ids:
+    """Блок очереди: раз в 2 секунды берёт у бэкенда список задач и рисует карточки."""
+    try:
+        jobs = requests.get(f"{API}/jobs", timeout=10).json()
+    except requests.RequestException:
+        st.error("Нет связи с сервером.")
+        return
+    if not jobs:
         st.write("Пока пусто. Загрузите документ выше.")
         return
-    for job_id in reversed(st.session_state.job_ids):  # новые сверху
-        try:
-            job = requests.get(f"{API}/jobs/{job_id}", timeout=10).json()
-        except requests.RequestException:
-            st.error("Нет связи с сервером.")
-            return
-        
+    if len(jobs) > MAX_SHOWN:
+        st.caption(f"Показаны последние {MAX_SHOWN} из {len(jobs)}")
+    for job in reversed(jobs[-MAX_SHOWN:]):
         st.markdown(
             f"""<div class="job {job['status']}">
                 <div class="job-top">
@@ -113,8 +112,10 @@ def queue_view() -> None:
 
 
 queue_view()
-
-# Очищает только список на странице; задачи на бэкенде остаются
-if st.session_state.job_ids and st.button("Очистить список"):
-    st.session_state.job_ids = []
+# Удаляет завершённые задачи из базы вместе с фото; задачи в работе остаются
+if st.button("Очистить историю"):
+    try:
+        requests.delete(f"{API}/jobs", timeout=10)
+    except requests.RequestException:
+        st.error("Нет связи с сервером.")
     st.rerun()
