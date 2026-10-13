@@ -12,19 +12,24 @@
 Документация со всеми адресами и кнопкой «Try it out»: http://127.0.0.1:8000/docs
 
 Адреса:
-    GET  /health         проверка, что сервер жив
-    POST /documents      принять фото + тип документа + вопрос, поставить в очередь (фото до MAX_UPLOAD_MB)
-    GET  /jobs/{job_id}  статус и результат одной задачи (страница опрашивает его каждые 2 с)
-    GET  /jobs           список всех задач
-    DELETE /jobs         удалить завершённые задачи и их фото
+    GET  /health                 проверка, что сервер жив
+    POST /documents              принять фото + тип документа + вопрос + session_id, поставить в очередь (фото до MAX_UPLOAD_MB)
+    GET  /jobs/{job_id}?session_id=...  статус одной задачи этого посетителя
+    GET  /jobs?session_id=...    список задач этого посетителя (страница опрашивает его каждые 2 с)
+    DELETE /jobs?session_id=...  удалить завершённые задачи посетителя и их фото
+
+Приватность без регистрации: страница придумывает посетителю случайный код session_id
+и хранит его в адресе (?s=...). Задачи в базе помечены этим кодом (столбец owner),
+список и очистка работают только с задачами своего кода.
 """
 import os
+import re
 import uuid
 from pathlib import Path
 from backend.db import DATA_DIR, init_db, get_job, list_jobs, delete_finished_jobs
 from backend.jobs import create_job, restore_queue
 
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, Query, UploadFile, HTTPException
 
 app = FastAPI()
 
@@ -48,6 +53,17 @@ MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 # и pipeline.py (параметр doc_type). Добавляешь новый тип - добавь во всех трёх местах.
 DOC_TYPES = {"study_certificate", "academic_leave", "practice_certificate"}
 
+# Код посетителя: страница делает его из uuid4().hex (32 символа). Короткие коды вроде "1"
+# не принимаем, чтобы чужую историю нельзя было открыть простым перебором.
+SESSION_RE = re.compile(r"[A-Za-z0-9_-]{16,64}")
+
+
+def check_session(session_id: str) -> str:
+    """Проверяет формат кода посетителя, иначе 400."""
+    if not SESSION_RE.fullmatch(session_id):
+        raise HTTPException(status_code=400, detail="Некорректный session_id")
+    return session_id
+
 
 @app.get("/health")
 def health():
@@ -60,8 +76,11 @@ async def upload_document(
     file: UploadFile = File(...),   # само фото
     doc_type: str = Form(...),      # тип документа, одно из DOC_TYPES
     question: str = Form(...),      # вопрос студента
+    session_id: str = Form(...),    # код посетителя, задача будет видна только ему
 ):
     """Принимает одно фото с типом документа и вопросом, сохраняет его и ставит задачу в очередь."""
+    check_session(session_id)
+
     # 1. Проверяем, что это картинка
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Можно загружать только фото (jpg, png, webp)")
@@ -83,32 +102,33 @@ async def upload_document(
     path.write_bytes(content)
 
     # 5. Ставим задачу в очередь (дальше работает jobs.py -> pipeline.py)
-    create_job(job_id, str(path), filename, doc_type, question)
+    create_job(job_id, session_id, str(path), filename, doc_type, question)
     return {"job_id": job_id, "status": "queued"}
 
 
 def _public(job: dict) -> dict:
-    """Копия задачи без пути к файлу, чтобы не отдавать его наружу."""
-    return {key: val for key, val in job.items() if key != "path"}
+    """Копия задачи без пути к файлу и кода владельца, чтобы не отдавать их наружу."""
+    return {key: val for key, val in job.items() if key not in ("path", "owner")}
 
 
 @app.get("/jobs/{job_id}")
-def job_status(job_id: str):
+def job_status(job_id: str, session_id: str = Query(...)):
     """Возвращает статус и результат одной задачи (404, если такой нет)."""
+    check_session(session_id)
     job = get_job(job_id)
-    if job is None:
+    if job is None or job["owner"] != session_id:
         raise HTTPException(404, "Задача не найдена")
     return _public(job)
 
 
 @app.get("/jobs")
-def all_jobs():
-    """Возвращает список всех задач."""
-    return [_public(j) for j in list_jobs()]
+def all_jobs(session_id: str = Query(...)):
+    """Возвращает список задач одного посетителя."""
+    return [_public(j) for j in list_jobs(check_session(session_id))]
 
 @app.delete("/jobs")
-def clear_jobs():
-    """Удаляет завершённые задачи вместе с их фото; задачи в работе не трогает."""
-    for path in delete_finished_jobs():
+def clear_jobs(session_id: str = Query(...)):
+    """Удаляет завершённые задачи посетителя вместе с их фото; задачи в работе не трогает."""
+    for path in delete_finished_jobs(check_session(session_id)):
         Path(path).unlink(missing_ok=True)  # удалить файл с диска, если он ещё есть
     return {"status": "ok"}

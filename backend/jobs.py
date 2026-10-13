@@ -20,9 +20,9 @@ from backend.db import insert_job, get_job, update_job, get_unfinished_jobs
 executor = ThreadPoolExecutor(max_workers=1)
 
 
-def create_job(job_id: str, path: str, filename: str, doc_type: str, question: str) -> None:
-    """Записывает задачу в базу и ставит её в очередь на обработку."""
-    insert_job(job_id, path, filename, doc_type, question)
+def create_job(job_id: str, owner: str, path: str, filename: str, doc_type: str, question: str) -> None:
+    """Записывает задачу посетителя owner в базу и ставит её в очередь на обработку."""
+    insert_job(job_id, owner, path, filename, doc_type, question)
     executor.submit(_run, job_id)  # поставить в очередь
 
 

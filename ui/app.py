@@ -2,6 +2,8 @@ import requests
 import streamlit as st
 from style import render_header
 import html
+import re
+import uuid
 
 # Сколько последних задач показывать на странице (старые остаются в базе)
 MAX_SHOWN = 20
@@ -39,6 +41,15 @@ st.set_page_config(page_title="Онлайн-деканат", page_icon="🎓")
 
 render_header()
 
+# ---------- Код посетителя ----------
+# Регистрации нет: каждому посетителю придумываем случайный код и кладём его в адрес (?s=...).
+# Бэкенд показывает только задачи с этим кодом. Обновление страницы историю не теряет,
+# а кто откроет ту же ссылку, увидит ту же историю (поэтому ссылкой лучше не делиться).
+session_id = st.query_params.get("s", "")
+if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", session_id):  # тот же формат проверяет бэкенд
+    session_id = uuid.uuid4().hex
+    st.query_params["s"] = session_id
+
 # ---------- Блок 1: загрузка ----------
 st.subheader("1. Загрузите документ")
 
@@ -56,7 +67,7 @@ if st.button("Отправить на проверку", type="primary", disable
             resp = requests.post(
                 f"{API}/documents",
                 files={"file": (f.name, f.getvalue(), f.type)},
-                data={"doc_type": DOC_TYPES[doc_label], "question": question},
+                data={"doc_type": DOC_TYPES[doc_label], "question": question, "session_id": session_id},
                 timeout=30,
             )
         except requests.RequestException:
@@ -93,7 +104,7 @@ def show_result(job: dict) -> None:
 def queue_view() -> None:
     """Блок очереди: раз в 2 секунды берёт у бэкенда список задач и рисует карточки."""
     try:
-        jobs = requests.get(f"{API}/jobs", timeout=10).json()
+        jobs = requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
     except (requests.RequestException, ValueError):
         st.error("Нет связи с сервером.")
         return
@@ -120,10 +131,10 @@ def queue_view() -> None:
 
 
 queue_view()
-# Удаляет завершённые задачи из базы вместе с фото; задачи в работе остаются
+# Удаляет завершённые задачи этого посетителя вместе с фото; задачи в работе остаются
 if st.button("Очистить историю"):
     try:
-        requests.delete(f"{API}/jobs", timeout=10)
+        requests.delete(f"{API}/jobs", params={"session_id": session_id}, timeout=10)
     except requests.RequestException:
         st.error("Нет связи с сервером.")
     st.rerun()

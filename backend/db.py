@@ -23,11 +23,14 @@ def get_conn():
 
 
 def init_db() -> None:
-    """Создаёт таблицу jobs, если её ещё нет."""
+    """Создаёт таблицу jobs, если её ещё нет.
+    owner - код посетителя (session_id из адреса страницы): каждый видит только свои задачи.
+    Схема менялась: если база создана старой версией (без owner), удалите data/app.db."""
     with get_conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
                 job_id     TEXT PRIMARY KEY,
+                owner      TEXT NOT NULL,
                 filename   TEXT NOT NULL,
                 doc_type   TEXT NOT NULL,
                 question   TEXT NOT NULL,
@@ -40,6 +43,8 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.execute("CREATE INDEX IF NOT EXISTS jobs_owner ON jobs (owner)")
+
 
 def _row_to_dict(row: sqlite3.Row) -> dict:
     """Превращает строку из базы в обычный словарь (как раньше лежал в JOBS)."""
@@ -50,12 +55,12 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     return job
 
 
-def insert_job(job_id: str, path: str, filename: str, doc_type: str, question: str) -> None:
-    """Добавляет в базу новую задачу (статус и прогресс ставятся сами: queued, 0)."""
+def insert_job(job_id: str, owner: str, path: str, filename: str, doc_type: str, question: str) -> None:
+    """Добавляет в базу новую задачу посетителя owner (статус и прогресс ставятся сами: queued, 0)."""
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO jobs (job_id, filename, doc_type, question, path) VALUES (?, ?, ?, ?, ?)",
-            (job_id, filename, doc_type, question, path),
+            "INSERT INTO jobs (job_id, owner, filename, doc_type, question, path) VALUES (?, ?, ?, ?, ?, ?)",
+            (job_id, owner, filename, doc_type, question, path),
         )
 
 
@@ -66,10 +71,10 @@ def get_job(job_id: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-def list_jobs() -> list[dict]:
-    """Возвращает все задачи, старые первыми."""
+def list_jobs(owner: str) -> list[dict]:
+    """Возвращает задачи одного посетителя, старые первыми."""
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM jobs ORDER BY rowid").fetchall()
+        rows = conn.execute("SELECT * FROM jobs WHERE owner = ? ORDER BY rowid", (owner,)).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
@@ -91,10 +96,10 @@ def get_unfinished_jobs() -> list[dict]:
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
-def delete_finished_jobs() -> list[str]:
-    """Удаляет из базы завершённые задачи (done/error) и возвращает пути к их фото."""
+def delete_finished_jobs(owner: str) -> list[str]:
+    """Удаляет завершённые задачи (done/error) посетителя owner и возвращает пути к их фото."""
+    finished = "owner = ? AND status IN ('done', 'error')"
     with get_conn() as conn:
-        paths = [r["path"] for r in conn.execute(
-            "SELECT path FROM jobs WHERE status IN ('done', 'error')")]
-        conn.execute("DELETE FROM jobs WHERE status IN ('done', 'error')")
+        paths = [r["path"] for r in conn.execute(f"SELECT path FROM jobs WHERE {finished}", (owner,))]
+        conn.execute(f"DELETE FROM jobs WHERE {finished}", (owner,))
     return paths
