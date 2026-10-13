@@ -3,3 +3,4 @@ uvicorn
 python-multipart
 streamlit>=1.46
 requests
+pillow

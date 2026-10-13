@@ -8,6 +8,10 @@ import uuid
 # Сколько последних задач показывать на странице (старые остаются в базе)
 MAX_SHOWN = 20
 
+# Сколько фото можно отправить за один раз. Бэкенд отдельно ограничивает число задач
+# посетителя в работе (MAX_ACTIVE_JOBS в backend/main.py), держите числа одинаковыми.
+MAX_FILES = 10
+
 API = "http://127.0.0.1:8000"
 
 DOC_TYPES = {
@@ -61,7 +65,11 @@ files = st.file_uploader(
     accept_multiple_files=True,
 )
 
-if st.button("Отправить на проверку", type="primary", disabled=not (files and question)):
+too_many = len(files) > MAX_FILES
+if too_many:
+    st.warning(f"За один раз можно отправить не больше {MAX_FILES} фото, сейчас выбрано {len(files)}.")
+
+if st.button("Отправить на проверку", type="primary", disabled=not (files and question) or too_many):
     for f in files:
         try:
             resp = requests.post(
@@ -74,7 +82,7 @@ if st.button("Отправить на проверку", type="primary", disable
             st.error("Не удалось связаться с сервером. Запущен ли uvicorn?")
             break
         if not resp.ok:
-            # Бэкенд отклонил файл (например, не картинка): показываем его причину
+            # Бэкенд отклонил файл (не картинка, слишком большой, очередь заполнена): показываем причину
             st.error(f"{f.name}: {error_detail(resp)}")
 
 # ---------- Блок 2: очередь и результаты ----------

@@ -96,6 +96,14 @@ def get_unfinished_jobs() -> list[dict]:
         ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
+def count_active_jobs(owner: str) -> int:
+    """Сколько задач посетителя ещё не завершено (в очереди или в обработке)."""
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE owner = ? AND status IN ('queued', 'processing')", (owner,)
+        ).fetchone()[0]
+
+
 def delete_finished_jobs(owner: str) -> list[str]:
     """Удаляет завершённые задачи (done/error) посетителя owner и возвращает пути к их фото."""
     finished = "owner = ? AND status IN ('done', 'error')"
