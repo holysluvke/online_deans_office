@@ -27,6 +27,14 @@ RESULT_STYLE = {
 }
 
 
+def error_detail(resp: requests.Response) -> str:
+    """Причина отказа от бэкенда; если ответ не JSON, то код и текст HTTP-статуса."""
+    try:
+        return resp.json().get("detail", resp.reason)
+    except ValueError:
+        return f"{resp.status_code} {resp.reason}"
+
+
 st.set_page_config(page_title="Онлайн-деканат", page_icon="🎓")
 
 render_header()
@@ -56,16 +64,16 @@ if st.button("Отправить на проверку", type="primary", disable
             break
         if not resp.ok:
             # Бэкенд отклонил файл (например, не картинка): показываем его причину
-            st.error(f"{f.name}: {resp.json().get('detail')}")
+            st.error(f"{f.name}: {error_detail(resp)}")
 
 # ---------- Блок 2: очередь и результаты ----------
 st.subheader("2. Очередь и результаты")
 
 
 def show_result(job: dict) -> None:
-    result = job["result"]
-    color, title = RESULT_STYLE.get(result["status"], ("var(--muted)", "РЕЗУЛЬТАТ"))
-    sources = ", ".join(result["sources"])
+    result = job["result"] or {}
+    color, title = RESULT_STYLE.get(result.get("status"), ("var(--muted)", "РЕЗУЛЬТАТ"))
+    sources = ", ".join(map(str, result.get("sources") or []))
     # анимацию показываем только при первом появлении результата
     seen = st.session_state.setdefault("seen_results", set())
     fresh = "" if job["job_id"] in seen else "fresh"
@@ -73,7 +81,7 @@ def show_result(job: dict) -> None:
     st.markdown(
         f"""<div class="result {fresh}" style="border-left-color:{color}">
         <div class="tag" style="color:{color}">{title}</div>
-        {html.escape(result["message"])}
+        {html.escape(str(result.get("message", "")))}
         <div class="src">{"источник: " + html.escape(sources) if sources else ""}</div>
         </div>""",
         unsafe_allow_html=True,
@@ -86,7 +94,7 @@ def queue_view() -> None:
     """Блок очереди: раз в 2 секунды берёт у бэкенда список задач и рисует карточки."""
     try:
         jobs = requests.get(f"{API}/jobs", timeout=10).json()
-    except requests.RequestException:
+    except (requests.RequestException, ValueError):
         st.error("Нет связи с сервером.")
         return
     if not jobs:
@@ -99,7 +107,7 @@ def queue_view() -> None:
             f"""<div class="job {job['status']}">
                 <div class="job-top">
                     <span class="name">{html.escape(job['filename'])}</span>
-                    <span class="pill">{STATUS_TEXT[job['status']]}</span>
+                    <span class="pill">{STATUS_TEXT.get(job['status'], job['status'])}</span>
                 </div>
                 <div class="bar"><span style="width:{job['progress']}%"></span></div>
             </div>""",
@@ -108,7 +116,7 @@ def queue_view() -> None:
         if job["status"] == "done":
             show_result(job)
         elif job["status"] == "error":
-            st.error(job["error"])
+            st.error(job["error"] or "Неизвестная ошибка")
 
 
 queue_view()

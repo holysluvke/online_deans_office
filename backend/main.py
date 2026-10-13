@@ -13,15 +13,15 @@
 
 Адреса:
     GET  /health         проверка, что сервер жив
-    POST /documents      принять фото + тип документа + вопрос, поставить в очередь
+    POST /documents      принять фото + тип документа + вопрос, поставить в очередь (фото до MAX_UPLOAD_MB)
     GET  /jobs/{job_id}  статус и результат одной задачи (страница опрашивает его каждые 2 с)
     GET  /jobs           список всех задач
     DELETE /jobs         удалить завершённые задачи и их фото
 """
+import os
 import uuid
 from pathlib import Path
-from backend.jobs import create_job
-from backend.db import init_db, get_job, list_jobs, delete_finished_jobs
+from backend.db import DATA_DIR, init_db, get_job, list_jobs, delete_finished_jobs
 from backend.jobs import create_job, restore_queue
 
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
@@ -32,11 +32,17 @@ init_db()
 restore_queue()
 
 # Куда сохраняем загруженные фото (папка data/ есть в .gitignore, в git не попадает)
-UPLOAD_DIR = Path("data/uploads")
+UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Что разрешаем: только картинки, остальные файлы сервер отклонит
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+# Максимальный размер фото в МБ. По умолчанию 10, можно поменять переменной окружения:
+#     set MAX_UPLOAD_MB=20   (Windows cmd)   /   $env:MAX_UPLOAD_MB=20   (PowerShell)
+# Лимит на стороне страницы задаётся отдельно: server.maxUploadSize в .streamlit/config.toml
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "10"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 # Допустимые типы документов. Эти же значения использует ui/app.py (словарь DOC_TYPES)
 # и pipeline.py (параметр doc_type). Добавляешь новый тип - добавь во всех трёх местах.
@@ -64,14 +70,20 @@ async def upload_document(
     if doc_type not in DOC_TYPES:
         raise HTTPException(status_code=400, detail="Неизвестный тип документа")
 
-    # 3. Сохраняем файл под уникальным именем, чтобы два photo.jpg не затёрли друг друга
-    job_id = uuid.uuid4().hex
-    suffix = Path(file.filename).suffix or ".jpg"
-    path = UPLOAD_DIR / f"{job_id}{suffix}"
-    path.write_bytes(await file.read())
+    # 3. Проверяем размер: читаем не больше лимита + 1 байт, чтобы не тянуть в память огромный файл
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Файл больше {MAX_UPLOAD_MB} МБ")
 
-    # 4. Ставим задачу в очередь (дальше работает jobs.py -> pipeline.py)
-    create_job(job_id, str(path), file.filename, doc_type, question)
+    # 4. Сохраняем файл под уникальным именем, чтобы два photo.jpg не затёрли друг друга
+    job_id = uuid.uuid4().hex
+    filename = file.filename or "photo.jpg"
+    suffix = Path(filename).suffix or ".jpg"
+    path = UPLOAD_DIR / f"{job_id}{suffix}"
+    path.write_bytes(content)
+
+    # 5. Ставим задачу в очередь (дальше работает jobs.py -> pipeline.py)
+    create_job(job_id, str(path), filename, doc_type, question)
     return {"job_id": job_id, "status": "queued"}
 
 

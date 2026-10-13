@@ -1,15 +1,24 @@
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 import json
 
-DB_PATH = Path("data/app.db")
+# Папка data/ в корне проекта; путь абсолютный, поэтому не зависит от того, откуда запущен сервер
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DB_PATH = DATA_DIR / "app.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-def get_conn() -> sqlite3.Connection:
-    """Открывает соединение с базой."""
-    conn = sqlite3.connect(DB_PATH)
+
+@contextmanager
+def get_conn():
+    """Открывает соединение с базой: в конце блока with сохраняет изменения и закрывает его."""
+    conn = sqlite3.connect(DB_PATH, timeout=10)  # если база занята, ждём до 10 с, а не падаем сразу
     conn.row_factory = sqlite3.Row  # строки можно читать по названию столбца: row["status"]
-    return conn
+    try:
+        with conn:  # commit при успехе, rollback при ошибке
+            yield conn
+    finally:
+        conn.close()
 
 
 
