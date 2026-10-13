@@ -17,17 +17,15 @@
     CLEANUP_EVERY_MINUTES  как часто проверять, по умолчанию 5
 """
 import asyncio
-import logging
 import os
 import time
 from pathlib import Path
 
 from backend.db import UPLOAD_DIR, delete_old_jobs, list_paths
+from backend.log import log
 
 JOB_TTL_MINUTES = int(os.getenv("JOB_TTL_MINUTES", "60"))
 CLEANUP_EVERY_MINUTES = int(os.getenv("CLEANUP_EVERY_MINUTES", "5"))
-
-log = logging.getLogger("uvicorn.error")  # пишем в тот же вывод, что и uvicorn
 
 
 def cleanup_once() -> None:

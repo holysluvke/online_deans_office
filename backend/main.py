@@ -20,6 +20,7 @@
     DELETE /jobs?session_id=...  удалить завершённые задачи посетителя и их фото
 
 Старые задачи и фото удаляются сами (через час), см. cleanup.py.
+Все запросы, отказы (4xx) и ошибки пишутся в лог data/logs/app.log, см. log.py.
 
 Приватность без регистрации: страница придумывает посетителю случайный код session_id
 и хранит его в адресе (?s=...). Задачи в базе помечены этим кодом (столбец owner),
@@ -28,6 +29,7 @@
 import asyncio
 import os
 import re
+import time
 import uuid
 from contextlib import asynccontextmanager
 from io import BytesIO
@@ -35,9 +37,13 @@ from pathlib import Path
 from backend.db import UPLOAD_DIR, init_db, get_job, list_jobs, delete_finished_jobs, count_active_jobs
 from backend.jobs import create_job, restore_queue
 from backend.cleanup import cleanup_once, cleanup_loop
+from backend.log import log
 
-from fastapi import FastAPI, File, Form, Query, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile, HTTPException
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from PIL import Image, UnidentifiedImageError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 init_db()
 cleanup_once()   # сначала стираем устаревшее, чтобы не возвращать в очередь задачи старше часа
@@ -53,6 +59,41 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Частые опросы страницы (раз в 2 с на каждого посетителя): при успехе пишем их только на уровне DEBUG,
+# иначе они забьют лог. Всё остальное и любые ошибки пишутся на уровне INFO и выше.
+QUIET_PATHS = ("/jobs", "/health")
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Пишет в лог каждый входящий запрос: метод, путь, статус и время ответа.
+    Строку запроса (?session_id=...) не пишем: это код посетителя."""
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        log.exception("%s %s -> необработанная ошибка", request.method, request.url.path)
+        raise
+    ms = (time.perf_counter() - start) * 1000
+    quiet = request.method == "GET" and request.url.path.startswith(QUIET_PATHS) and response.status_code < 400
+    log.log(10 if quiet else 20, "%s %s -> %d (%.0f мс)", request.method, request.url.path, response.status_code, ms)
+    return response
+
+
+@app.exception_handler(StarletteHTTPException)
+async def log_http_error(request: Request, exc: StarletteHTTPException):
+    """Отказы (400, 404, 413, 429...) пишем в лог вместе с причиной, а ответ отдаём как обычно."""
+    log.warning("%s %s -> %d: %s", request.method, request.url.path, exc.status_code, exc.detail)
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def log_validation_error(request: Request, exc: RequestValidationError):
+    """Запрос без нужных полей (422): пишем в лог, какие поля не так, без их значений."""
+    problems = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+    log.warning("%s %s -> 422: %s", request.method, request.url.path, problems)
+    return await request_validation_exception_handler(request, exc)
 
 # Что разрешаем: только картинки, остальные файлы сервер отклонит.
 # content-type присылает сам клиент, поэтому это лишь первый фильтр; настоящая проверка - check_image()
@@ -157,6 +198,7 @@ async def upload_document(
 
     # 7. Ставим задачу в очередь (дальше работает jobs.py -> pipeline.py)
     create_job(job_id, session_id, str(path), filename, doc_type, question)
+    log.info("Задача %s принята: %s, %s, %d КБ", job_id, doc_type, suffix.lstrip("."), len(content) // 1024)
     return {"job_id": job_id, "status": "queued"}
 
 
@@ -183,6 +225,8 @@ def all_jobs(session_id: str = Query(...)):
 @app.delete("/jobs")
 def clear_jobs(session_id: str = Query(...)):
     """Удаляет завершённые задачи посетителя вместе с их фото; задачи в работе не трогает."""
-    for path in delete_finished_jobs(check_session(session_id)):
+    paths = delete_finished_jobs(check_session(session_id))
+    for path in paths:
         Path(path).unlink(missing_ok=True)  # удалить файл с диска, если он ещё есть
+    log.info("Очистка истории посетителем: удалено задач %d", len(paths))
     return {"status": "ok"}
