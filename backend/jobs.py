@@ -36,6 +36,8 @@ def restore_queue() -> None:
 def _run(job_id: str) -> None:
     """Обрабатывает одну задачу в фоне: сначала OCR (extract_fields), потом ответ по Положению (answer_question)."""
     job = get_job(job_id)  # свежая запись из базы: нужны путь, тип документа и вопрос
+    if job is None:
+        return  # задачу успели удалить (автоудаление или очистка), пока она ждала в очереди
     try:
         update_job(job_id, status="processing", progress=10)
 

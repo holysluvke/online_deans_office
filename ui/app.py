@@ -87,6 +87,8 @@ if st.button("Отправить на проверку", type="primary", disable
 
 # ---------- Блок 2: очередь и результаты ----------
 st.subheader("2. Очередь и результаты")
+# Срок совпадает с JOB_TTL_MINUTES в backend/cleanup.py
+st.caption("Фото и результаты хранятся час, потом удаляются автоматически.")
 
 
 def show_result(job: dict) -> None:

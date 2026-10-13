@@ -19,29 +19,40 @@
     GET  /jobs?session_id=...    список задач этого посетителя (страница опрашивает его каждые 2 с)
     DELETE /jobs?session_id=...  удалить завершённые задачи посетителя и их фото
 
+Старые задачи и фото удаляются сами (через час), см. cleanup.py.
+
 Приватность без регистрации: страница придумывает посетителю случайный код session_id
 и хранит его в адресе (?s=...). Задачи в базе помечены этим кодом (столбец owner),
 список и очистка работают только с задачами своего кода.
 """
+import asyncio
 import os
 import re
 import uuid
+from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
-from backend.db import DATA_DIR, init_db, get_job, list_jobs, delete_finished_jobs, count_active_jobs
+from backend.db import UPLOAD_DIR, init_db, get_job, list_jobs, delete_finished_jobs, count_active_jobs
 from backend.jobs import create_job, restore_queue
+from backend.cleanup import cleanup_once, cleanup_loop
 
 from fastapi import FastAPI, File, Form, Query, UploadFile, HTTPException
 from PIL import Image, UnidentifiedImageError
 
-app = FastAPI()
-
 init_db()
+cleanup_once()   # сначала стираем устаревшее, чтобы не возвращать в очередь задачи старше часа
 restore_queue()
 
-# Куда сохраняем загруженные фото (папка data/ есть в .gitignore, в git не попадает)
-UPLOAD_DIR = DATA_DIR / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Пока сервер работает, в фоне крутится автоудаление старых задач и фото."""
+    task = asyncio.create_task(cleanup_loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Что разрешаем: только картинки, остальные файлы сервер отклонит.
 # content-type присылает сам клиент, поэтому это лишь первый фильтр; настоящая проверка - check_image()

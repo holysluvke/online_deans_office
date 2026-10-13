@@ -8,6 +8,10 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DB_PATH = DATA_DIR / "app.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+# Куда сохраняем загруженные фото (папка data/ есть в .gitignore, в git не попадает)
+UPLOAD_DIR = DATA_DIR / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 @contextmanager
 def get_conn():
@@ -102,6 +106,23 @@ def count_active_jobs(owner: str) -> int:
         return conn.execute(
             "SELECT COUNT(*) FROM jobs WHERE owner = ? AND status IN ('queued', 'processing')", (owner,)
         ).fetchone()[0]
+
+
+def delete_old_jobs(max_age_minutes: int) -> list[str]:
+    """Удаляет задачи старше max_age_minutes (кроме тех, что сейчас обрабатываются) и возвращает пути к их фото."""
+    # created_at хранится в UTC в виде 'ГГГГ-ММ-ДД ЧЧ:ММ:СС', datetime('now', ...) даёт тот же формат
+    old = "created_at < datetime('now', ?) AND status != 'processing'"
+    age = f"-{max_age_minutes} minutes"
+    with get_conn() as conn:
+        paths = [r["path"] for r in conn.execute(f"SELECT path FROM jobs WHERE {old}", (age,))]
+        conn.execute(f"DELETE FROM jobs WHERE {old}", (age,))
+    return paths
+
+
+def list_paths() -> list[str]:
+    """Пути к фото всех задач, которые есть в базе."""
+    with get_conn() as conn:
+        return [r["path"] for r in conn.execute("SELECT path FROM jobs")]
 
 
 def delete_finished_jobs(owner: str) -> list[str]:
