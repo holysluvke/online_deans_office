@@ -66,7 +66,6 @@ _COMPLETENESS_TRIGGERS = ("содержит ли документ все обя�
 _FIELD_LOOKUP_TRIGGERS = ("укажи значение поля", "значение поля")
 
 def extract_fields(image_path: str, doc_type: str) -> dict:
-    """ЗАГЛУШКА RAG: по полям и вопросу вернуть ответ со ссылкой на пункт."""
     """Фото или PDF -> плоский словарь полей. Полный текст остаётся в run_ocr."""
     from backend.ocr import run_ocr
     from backend.ocr.fields import pick_fields
