@@ -24,7 +24,8 @@ OCR для «Онлайн-деканата»: фото или PDF -> чисты�
         {
           "text": "СПРАВКА ОБ ОБУЧЕНИИ",
           "confidence": 0.98,
-          "low_confidence": false,            # true -> строки нет в "text"
+          "low_confidence": false,            # true = строку читала рукописная модель или Paddle не уверен
+          "source": "paddle",                 # paddle или trocr
           "bbox": [x, y, ширина, высота],     # на исходной странице, для подсветки
           "polygon": [[x, y], [x, y], [x, y], [x, y]]
         }
@@ -61,6 +62,9 @@ def run_ocr(path: str | Path) -> dict:
     for page in pages:
         prepared = prepare(page.image)
         raw_lines, turns = engine.recognize(prepared.image)
+        from backend.ocr.handwriting import reread
+
+        raw_lines = reread(prepared.image, raw_lines)
         lines = [_to_page_coords(l, prepared.scale, page.image.size) for l in raw_lines]
         text = page_text(lines)
         if not text:
@@ -82,7 +86,7 @@ def run_ocr(path: str | Path) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "source": {"file": path.name, "format": fmt, "pages": len(pages)},
-        "engine": engine.engine_info(),
+        "engine": {**engine.engine_info(), "handwriting": "kazars24/trocr-base-handwritten-ru"},
         "text": full_text,
         "pages": out_pages,
         "warnings": warnings,
@@ -108,7 +112,8 @@ def _to_page_coords(line: dict, scale: float, size: tuple[int, int]) -> dict:
     return {
         "text": clean_line(line["text"]),
         "confidence": confidence,
-        "low_confidence": confidence < MIN_CONFIDENCE,
+        "low_confidence": line.get("source") == "trocr" or confidence < MIN_CONFIDENCE,
+        "source": line.get("source", "paddle"),
         "bbox": [left, top, int(max(xs)) - left + 1, int(max(ys)) - top + 1],
         "polygon": polygon,
     }

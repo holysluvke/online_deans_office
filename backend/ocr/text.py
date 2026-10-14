@@ -93,7 +93,9 @@ def reading_order(lines: list[dict]) -> list[list[dict]]:
 
 
 def page_text(lines: list[dict]) -> str:
-    rows = reading_order([l for l in lines if not l["low_confidence"]])
+    # Слабые строки тоже остаются: их уже перечитала рукописная модель,
+    # а если она не смогла — в тексте текст Paddle, не пустое поле.
+    rows = reading_order(lines)
     out = []
     for row in rows:
         joined = clean_line(" ".join(l["text"] for l in row))

@@ -213,12 +213,36 @@ class TestText:
         ]
         assert page_text(lines) == "Справка"
 
-    def test_low_confidence_not_in_text(self):
+    def test_weak_line_stays_in_text(self):
         lines = [
             {"text": "Справка", "bbox": [0, 0, 100, 30], "low_confidence": False},
-            {"text": "##%", "bbox": [0, 60, 100, 30], "low_confidence": True},
+            {"text": "отпуск", "bbox": [0, 60, 100, 30], "low_confidence": True},
         ]
-        assert page_text(lines) == "Справка"
+        assert page_text(lines) == "Справка\nотпуск"
+
+
+def test_handwriting_rereads_only_weak_lines():
+    from backend.ocr.handwriting import reread
+
+    image = Image.new("RGB", (200, 90), "white")
+    lines = [
+        {"text": "СПРАВКА", "confidence": 0.99, "polygon": [[10, 10], [80, 10], [80, 30], [10, 30]]},
+        {"text": "ыва", "confidence": 0.2, "polygon": [[10, 40], [120, 40], [120, 70], [10, 70]]},
+    ]
+    out = reread(image, lines, reader=lambda crop: "по семейным обстоятельствам")
+    assert out[0]["text"] == "СПРАВКА" and out[0]["source"] == "paddle"
+    assert out[1]["text"] == "по семейным обстоятельствам" and out[1]["source"] == "trocr"
+
+
+def test_handwriting_keeps_paddle_if_second_model_empty():
+    from backend.ocr.handwriting import reread
+
+    image = Image.new("RGB", (200, 90), "white")
+    lines = [
+        {"text": "причина", "confidence": 0.2, "polygon": [[10, 40], [120, 40], [120, 70], [10, 70]]},
+    ]
+    out = reread(image, lines, reader=lambda crop: "  ")
+    assert out[0]["text"] == "причина" and out[0]["source"] == "paddle"
 
 
 # ---------- обратный поворот рамок ----------

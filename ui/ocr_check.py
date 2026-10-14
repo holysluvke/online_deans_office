@@ -76,7 +76,7 @@ def check(path: Path) -> None:
         st.image(
             draw_boxes(pages[index].image, page["lines"]),
             caption=f"Поворот {page['rotation']}°. Тень выровнена: {'да' if page['shadow_fixed'] else 'нет'}. "
-                    "Зелёная рамка — строка в тексте, оранжевая — уверенность ниже 0.5, в текст не попала.",
+                    "Зелёная рамка — печать. Оранжевая — строку перечитала рукописная модель либо печатная была не уверена.",
         )
     with text:
         st.subheader("Текст из файла")
@@ -88,7 +88,7 @@ def check(path: Path) -> None:
             {
                 "текст": line["text"],
                 "уверенность": line["confidence"],
-                "в текст": "нет" if line["low_confidence"] else "да",
+                "движок": "рукопись" if line.get("source") == "trocr" else "печать",
                 "рамка": line["bbox"],
             }
             for line in page["lines"]

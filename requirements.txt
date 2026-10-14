@@ -11,4 +11,8 @@ pypdfium2
 pillow
 numpy
 
+# Рукописные строки. Трансформер TrOCR, только CPU
+torch
+transformers
+
 pytest
