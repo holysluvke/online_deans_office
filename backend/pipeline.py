@@ -1,13 +1,11 @@
 """
 =====================  ЭТО МЕСТО ДЛЯ ML-ЧАСТИ  =====================
 
-Сейчас здесь две ЗАГЛУШКИ: они возвращают фейковые данные, чтобы сайт можно было
-разрабатывать и проверять, не дожидаясь настоящего распознавания.
+extract_fields уже читает документ. answer_question пока заглушка: ответ по Положению
+делает другой человек.
 
-Что нужно сделать:
-    - заменить ТЕЛО функций extract_fields и answer_question на настоящий код
-      (OCR и поиск по Положению);
-    - НЕ менять названия функций, их аргументы и ФОРМАТ того, что они возвращают.
+Что нельзя менять:
+    - названия функций, их аргументы и формат ответа.
       Тогда очередь (jobs.py), бэкенд (main.py) и страница (ui/app.py) продолжат
       работать без правок.
 
@@ -24,9 +22,33 @@ doc_type - одно из:
     "internship_certificate"      справка о практике
 
 Что возвращают функции:
-    extract_fields  -> словарь {имя_поля: значение}; не найденное поле = "не найдено", печать/подпись = True/False
-    answer_question -> {"status": "ok" | "missing" | "no_answer", "message": "текст ответа", "sources": ["п. 3.4"]}
-                       ok = документ в порядке, missing = чего-то не хватает, no_answer = ответа нет (не выдумывать)
+    extract_fields  -> плоский словарь {строка: строка | bool}.
+                       Без вложенности, списков и None.
+                       Нет поля на листе — "не найдено". Печать и подпись — True/False.
+                       study_certificate:
+                           student_name, university, program, study_form,
+                           study_start, study_end, document_number, issue_date,
+                           signature_present, seal_present
+                       academic_leave (то же для academic_leave_application):
+                           student_name, group, course, leave_reason,
+                           leave_start, leave_end, application_date, signature_present
+                       practice_certificate (то же для internship_certificate):
+                           student_name, organization, internship_start, internship_end,
+                           supervisor_name, grade, document_number, issue_date,
+                           signature_present, seal_present
+                       Даты — ISO (2026-09-01), курс — строка, не число.
+                       Слабые строки перед разбором читает трансформер TrOCR.
+                       Этот словарь уже уходит в answer_question как есть. Его не оборачивать.
+    answer_question -> плоский словарь, ключи фиксированы:
+                       {
+                         "status": "ok" | "missing" | "no_answer",
+                         "message": "Не хватает: дата выдачи. По п. 3.1.",
+                         "sources": ["rule.3.1"],
+                         "answerable": True,
+                         "value": "missing_fields",
+                       }
+                       ok = документ в порядке, missing = чего-то не хватает, no_answer = ответа нет (не выдумывать).
+                       Тело answer_question всё ещё заглушка: его пишет следующий человек.
 """
 import time
 
@@ -44,15 +66,15 @@ _COMPLETENESS_TRIGGERS = ("содержит ли документ все обя�
 _FIELD_LOOKUP_TRIGGERS = ("укажи значение поля", "значение поля")
 
 def extract_fields(image_path: str, doc_type: str) -> dict:
-    """ЗАГЛУШКА OCR: по фото вернуть поля документа."""
-    #тестовая заглушка
-    time.sleep(1)  # притворяемся, что думаем
-    return {
-        "fio": "Иванов Иван Иванович",
-        "university": "Южный федеральный университет",
-        "issue_date": "не найдено",
-        "stamp": False,
-    }
+    """ЗАГЛУШКА RAG: по полям и вопросу вернуть ответ со ссылкой на пункт."""
+    """Фото или PDF -> плоский словарь полей. Полный текст остаётся в run_ocr."""
+    from backend.ocr import run_ocr
+    from backend.ocr.fields import pick_fields
+    from backend.ocr.intake import load_document
+
+    recognized = run_ocr(image_path)
+    images = [page.image for page in load_document(image_path)[1]]
+    return pick_fields(doc_type, recognized, images)
 
 def _classify(question: str) -> str:
     """Определяет тип вопроса: 'who_decides' | 'completeness' | 'field_lookup' | 'unknown'."""
