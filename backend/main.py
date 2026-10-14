@@ -13,8 +13,9 @@
 
 Адреса:
     GET  /health                 проверка, что сервер жив
-    POST /documents              принять фото + тип документа + вопрос + session_id, поставить в очередь
-                                 (фото до MAX_UPLOAD_MB, настоящая картинка, не больше MAX_ACTIVE_JOBS задач в работе)
+    POST /documents              принять фото или PDF + тип документа + вопрос + session_id, поставить в очередь
+                                 (файл до MAX_UPLOAD_MB, настоящая картинка или PDF, не больше MAX_ACTIVE_JOBS задач в работе;
+                                 PDF сразу превращается в картинку, см. pdf.py)
     GET  /jobs/{job_id}?session_id=...  статус одной задачи этого посетителя
     GET  /jobs?session_id=...    список задач этого посетителя (страница опрашивает его каждые 2 с)
     DELETE /jobs?session_id=...  удалить завершённые задачи посетителя и их фото
@@ -37,9 +38,11 @@ from pathlib import Path
 from backend.db import UPLOAD_DIR, init_db, get_job, list_jobs, delete_finished_jobs, count_active_jobs
 from backend.jobs import create_job, restore_queue
 from backend.cleanup import cleanup_once, cleanup_loop
+from backend.pdf import pdf_to_png, PdfError
 from backend.log import log
 
 from fastapi import FastAPI, File, Form, Query, Request, UploadFile, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from PIL import Image, UnidentifiedImageError
@@ -95,9 +98,11 @@ async def log_validation_error(request: Request, exc: RequestValidationError):
     log.warning("%s %s -> 422: %s", request.method, request.url.path, problems)
     return await request_validation_exception_handler(request, exc)
 
-# Что разрешаем: только картинки, остальные файлы сервер отклонит.
-# content-type присылает сам клиент, поэтому это лишь первый фильтр; настоящая проверка - check_image()
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+# Что разрешаем: картинки и PDF, остальные файлы сервер отклонит.
+# content-type присылает сам клиент, поэтому это лишь первый фильтр;
+# настоящая проверка - check_image() для картинок и pdf_to_png() для PDF
+PDF_TYPE = "application/pdf"
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", PDF_TYPE}
 
 # Форматы, которые Pillow должен распознать в содержимом файла, и расширение, с которым сохраняем
 IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
@@ -119,7 +124,7 @@ MAX_ACTIVE_JOBS = int(os.getenv("MAX_ACTIVE_JOBS", "10"))
 
 # Допустимые типы документов. Эти же значения использует ui/app.py (словарь DOC_TYPES)
 # и pipeline.py (параметр doc_type). Добавляешь новый тип - добавь во всех трёх местах.
-DOC_TYPES = {"study_certificate", "academic_leave", "practice_certificate"}
+DOC_TYPES = {"study_certificate", "academic_leave_application", "internship_certificate"}
 
 # Код посетителя: страница делает его из uuid4().hex (32 символа). Короткие коды вроде "1"
 # не принимаем, чтобы чужую историю нельзя было открыть простым перебором.
@@ -164,12 +169,12 @@ async def upload_document(
     question: str = Form(...),      # вопрос студента
     session_id: str = Form(...),    # код посетителя, задача будет видна только ему
 ):
-    """Принимает одно фото с типом документа и вопросом, сохраняет его и ставит задачу в очередь."""
+    """Принимает одно фото или PDF с типом документа и вопросом, сохраняет его как картинку и ставит задачу в очередь."""
     check_session(session_id)
 
-    # 1. Проверяем, что это картинка
+    # 1. Проверяем, что это картинка или PDF
     if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Можно загружать только фото (jpg, png, webp)")
+        raise HTTPException(status_code=400, detail="Можно загружать только JPG, PNG или PDF")
 
     # 2. Проверяем тип документа
     if doc_type not in DOC_TYPES:
@@ -187,8 +192,19 @@ async def upload_document(
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail=f"Файл больше {MAX_UPLOAD_MB} МБ")
 
-    # 5. Проверяем содержимое: это действительно картинка (а не, например, переименованный .exe)
-    suffix = check_image(content)  # расширение берём по настоящему формату, а не по имени файла
+    # 5. Проверяем содержимое: это действительно картинка или PDF (а не, например, переименованный .exe).
+    #    PDF превращаем в PNG сразу здесь: pipeline.py (OCR) работает только с картинками
+    if file.content_type == PDF_TYPE:
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=400, detail="Файл не является PDF, либо повреждён")
+        try:
+            content = await run_in_threadpool(pdf_to_png, content)  # отрисовка занимает время, не блокируем сервер
+        except PdfError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        suffix, source = ".png", "pdf"
+    else:
+        suffix = check_image(content)  # расширение берём по настоящему формату, а не по имени файла
+        source = suffix.lstrip(".")
 
     # 6. Сохраняем файл под уникальным именем, чтобы два photo.jpg не затёрли друг друга
     job_id = uuid.uuid4().hex
@@ -198,7 +214,7 @@ async def upload_document(
 
     # 7. Ставим задачу в очередь (дальше работает jobs.py -> pipeline.py)
     create_job(job_id, session_id, str(path), filename, doc_type, question)
-    log.info("Задача %s принята: %s, %s, %d КБ", job_id, doc_type, suffix.lstrip("."), len(content) // 1024)
+    log.info("Задача %s принята: %s, %s, %d КБ", job_id, doc_type, source, len(content) // 1024)
     return {"job_id": job_id, "status": "queued"}
 
 

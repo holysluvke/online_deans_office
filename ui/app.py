@@ -8,7 +8,7 @@ import uuid
 # Сколько последних задач показывать на странице (старые остаются в базе)
 MAX_SHOWN = 20
 
-# Сколько фото можно отправить за один раз. Бэкенд отдельно ограничивает число задач
+# Сколько файлов можно отправить за один раз. Бэкенд отдельно ограничивает число задач
 # посетителя в работе (MAX_ACTIVE_JOBS в backend/main.py), держите числа одинаковыми.
 MAX_FILES = 10
 
@@ -16,8 +16,8 @@ API = "http://127.0.0.1:8000"
 
 DOC_TYPES = {
     "Справка об обучении": "study_certificate",
-    "Заявление на академический отпуск": "academic_leave",
-    "Справка о практике": "practice_certificate",
+    "Заявление на академический отпуск": "academic_leave_application",
+    "Справка о практике": "internship_certificate",
 }
 STATUS_TEXT = {
     "queued": "В очереди",
@@ -60,14 +60,14 @@ st.subheader("1. Загрузите документ")
 doc_label = st.selectbox("Тип документа", list(DOC_TYPES))
 question = st.text_input("Ваш вопрос", placeholder="Достаточно ли справки для перевода на 2 курс?")
 files = st.file_uploader(
-    "Фото документа",
-    type=["jpg", "jpeg", "png", "webp"],  # только картинки
+    "Фото или PDF документа",
+    type=["jpg", "jpeg", "png", "webp", "pdf"],  # картинки и PDF (PDF бэкенд сам превращает в картинку)
     accept_multiple_files=True,
 )
 
 too_many = len(files) > MAX_FILES
 if too_many:
-    st.warning(f"За один раз можно отправить не больше {MAX_FILES} фото, сейчас выбрано {len(files)}.")
+    st.warning(f"За один раз можно отправить не больше {MAX_FILES} файлов, сейчас выбрано {len(files)}.")
 
 if st.button("Отправить на проверку", type="primary", disabled=not (files and question) or too_many):
     for f in files:
@@ -82,7 +82,7 @@ if st.button("Отправить на проверку", type="primary", disable
             st.error("Не удалось связаться с сервером. Запущен ли uvicorn?")
             break
         if not resp.ok:
-            # Бэкенд отклонил файл (не картинка, слишком большой, очередь заполнена): показываем причину
+            # Бэкенд отклонил файл (не картинка и не PDF, слишком большой, очередь заполнена): показываем причину
             st.error(f"{f.name}: {error_detail(resp)}")
 
 # ---------- Блок 2: очередь и результаты ----------
