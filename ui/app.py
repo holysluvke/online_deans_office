@@ -2,13 +2,22 @@ import requests
 import streamlit as st
 from style import render_header
 import html
+import re
+import uuid
+
+# Сколько последних задач показывать на странице (старые остаются в базе)
+MAX_SHOWN = 20
+
+# Сколько файлов можно отправить за один раз. Бэкенд отдельно ограничивает число задач
+# посетителя в работе (MAX_ACTIVE_JOBS в backend/main.py), держите числа одинаковыми.
+MAX_FILES = 10
 
 API = "http://127.0.0.1:8000"
 
 DOC_TYPES = {
     "Справка об обучении": "study_certificate",
-    "Заявление на академический отпуск": "academic_leave",
-    "Справка о практике": "practice_certificate",
+    "Заявление на академический отпуск": "academic_leave_application",
+    "Справка о практике": "internship_certificate",
 }
 STATUS_TEXT = {
     "queued": "В очереди",
@@ -24,13 +33,26 @@ RESULT_STYLE = {
 }
 
 
+def error_detail(resp: requests.Response) -> str:
+    """Причина отказа от бэкенда; если ответ не JSON, то код и текст HTTP-статуса."""
+    try:
+        return resp.json().get("detail", resp.reason)
+    except ValueError:
+        return f"{resp.status_code} {resp.reason}"
+
+
 st.set_page_config(page_title="Онлайн-деканат", page_icon="🎓")
 
 render_header()
 
-# Память между перезапусками страницы: список номеров наших задач
-if "job_ids" not in st.session_state:
-    st.session_state.job_ids = []
+# ---------- Код посетителя ----------
+# Регистрации нет: каждому посетителю придумываем случайный код и кладём его в адрес (?s=...).
+# Бэкенд показывает только задачи с этим кодом. Обновление страницы историю не теряет,
+# а кто откроет ту же ссылку, увидит ту же историю (поэтому ссылкой лучше не делиться).
+session_id = st.query_params.get("s", "")
+if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", session_id):  # тот же формат проверяет бэкенд
+    session_id = uuid.uuid4().hex
+    st.query_params["s"] = session_id
 
 # ---------- Блок 1: загрузка ----------
 st.subheader("1. Загрузите документ")
@@ -38,36 +60,41 @@ st.subheader("1. Загрузите документ")
 doc_label = st.selectbox("Тип документа", list(DOC_TYPES))
 question = st.text_input("Ваш вопрос", placeholder="Достаточно ли справки для перевода на 2 курс?")
 files = st.file_uploader(
-    "Фото документа",
-    type=["jpg", "jpeg", "png", "webp"],  # только картинки
+    "Фото или PDF документа",
+    type=["jpg", "jpeg", "png", "webp", "pdf"],  # картинки и PDF (PDF бэкенд сам превращает в картинку)
     accept_multiple_files=True,
 )
 
-if st.button("Отправить на проверку", type="primary", disabled=not (files and question)):
+too_many = len(files) > MAX_FILES
+if too_many:
+    st.warning(f"За один раз можно отправить не больше {MAX_FILES} файлов, сейчас выбрано {len(files)}.")
+
+if st.button("Отправить на проверку", type="primary", disabled=not (files and question) or too_many):
     for f in files:
         try:
             resp = requests.post(
                 f"{API}/documents",
                 files={"file": (f.name, f.getvalue(), f.type)},
-                data={"doc_type": DOC_TYPES[doc_label], "question": question},
+                data={"doc_type": DOC_TYPES[doc_label], "question": question, "session_id": session_id},
                 timeout=30,
             )
         except requests.RequestException:
             st.error("Не удалось связаться с сервером. Запущен ли uvicorn?")
             break
-        if resp.ok:
-            st.session_state.job_ids.append(resp.json()["job_id"])
-        else:
-            st.error(f"{f.name}: {resp.json().get('detail')}")
+        if not resp.ok:
+            # Бэкенд отклонил файл (не картинка и не PDF, слишком большой, очередь заполнена): показываем причину
+            st.error(f"{f.name}: {error_detail(resp)}")
 
 # ---------- Блок 2: очередь и результаты ----------
 st.subheader("2. Очередь и результаты")
+# Срок совпадает с JOB_TTL_MINUTES в backend/cleanup.py
+st.caption("Фото и результаты хранятся час, потом удаляются автоматически.")
 
 
 def show_result(job: dict) -> None:
-    result = job["result"]
-    color, title = RESULT_STYLE.get(result["status"], ("var(--muted)", "РЕЗУЛЬТАТ"))
-    sources = ", ".join(result["sources"])
+    result = job["result"] or {}
+    color, title = RESULT_STYLE.get(result.get("status"), ("var(--muted)", "РЕЗУЛЬТАТ"))
+    sources = ", ".join(map(str, result.get("sources") or []))
     # анимацию показываем только при первом появлении результата
     seen = st.session_state.setdefault("seen_results", set())
     fresh = "" if job["job_id"] in seen else "fresh"
@@ -75,7 +102,7 @@ def show_result(job: dict) -> None:
     st.markdown(
         f"""<div class="result {fresh}" style="border-left-color:{color}">
         <div class="tag" style="color:{color}">{title}</div>
-        {html.escape(result["message"])}
+        {html.escape(str(result.get("message", "")))}
         <div class="src">{"источник: " + html.escape(sources) if sources else ""}</div>
         </div>""",
         unsafe_allow_html=True,
@@ -85,22 +112,23 @@ def show_result(job: dict) -> None:
 
 @st.fragment(run_every=2)  # этот кусок сам обновляется каждые 2 секунды
 def queue_view() -> None:
-    """Блок очереди: раз в 2 секунды запрашивает статус каждой задачи у бэкенда и рисует карточки."""
-    if not st.session_state.job_ids:
+    """Блок очереди: раз в 2 секунды берёт у бэкенда список задач и рисует карточки."""
+    try:
+        jobs = requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
+    except (requests.RequestException, ValueError):
+        st.error("Нет связи с сервером.")
+        return
+    if not jobs:
         st.write("Пока пусто. Загрузите документ выше.")
         return
-    for job_id in reversed(st.session_state.job_ids):  # новые сверху
-        try:
-            job = requests.get(f"{API}/jobs/{job_id}", timeout=10).json()
-        except requests.RequestException:
-            st.error("Нет связи с сервером.")
-            return
-        
+    if len(jobs) > MAX_SHOWN:
+        st.caption(f"Показаны последние {MAX_SHOWN} из {len(jobs)}")
+    for job in reversed(jobs[-MAX_SHOWN:]):
         st.markdown(
             f"""<div class="job {job['status']}">
                 <div class="job-top">
                     <span class="name">{html.escape(job['filename'])}</span>
-                    <span class="pill">{STATUS_TEXT[job['status']]}</span>
+                    <span class="pill">{STATUS_TEXT.get(job['status'], job['status'])}</span>
                 </div>
                 <div class="bar"><span style="width:{job['progress']}%"></span></div>
             </div>""",
@@ -109,12 +137,14 @@ def queue_view() -> None:
         if job["status"] == "done":
             show_result(job)
         elif job["status"] == "error":
-            st.error(job["error"])
+            st.error(job["error"] or "Неизвестная ошибка")
 
 
 queue_view()
-
-# Очищает только список на странице; задачи на бэкенде остаются
-if st.session_state.job_ids and st.button("Очистить список"):
-    st.session_state.job_ids = []
+# Удаляет завершённые задачи этого посетителя вместе с фото; задачи в работе остаются
+if st.button("Очистить историю"):
+    try:
+        requests.delete(f"{API}/jobs", params={"session_id": session_id}, timeout=10)
+    except requests.RequestException:
+        st.error("Нет связи с сервером.")
     st.rerun()

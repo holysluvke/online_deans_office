@@ -37,6 +37,7 @@ CSS = """
     --info: #2B3BE0;    /* ответа нет */
     --err: #D64545;     /* ошибка */
     --mint: #5FE0B0;
+    --bar: var(--ok); 
     --shadow: 0 1px 2px rgba(17,17,17,.04), 0 10px 28px -14px rgba(17,17,17,.18);
     --aura-1: rgba(30, 30, 240, .42);    /* «аура» в шапке: синий центр */
     --aura-2: rgba(80, 225, 175, .55);  /* и мятный ореол */
@@ -48,6 +49,7 @@ CSS = """
     :root {
         --bg: #0B0C10;
         --card: #14161C;
+        --bar: var(--blue);
         --line: #262A33;
         --text: #F2F2F0;
         --muted: #9AA0AA;
@@ -107,7 +109,7 @@ h2, h3 {font-weight: 400 !important; letter-spacing: -0.01em;}
                background: var(--c); margin-right: 8px;}
 .bar {height: 4px; border-radius: 999px; background: var(--line); margin-top: 12px; overflow: hidden;}
 .bar span {display: block; height: 100%; border-radius: 999px;
-           background: linear-gradient(90deg, var(--blue), var(--mint));}
+           background: var(--bar);}
 .job.done .bar {display: none;}  /* у готовых карточек линия не нужна */
 /* карточка ответа (app.py, функция show_result); цвет левой черты задаёт app.py */
 .result {background: var(--card); border: 1px solid var(--line); border-left-width: 4px;

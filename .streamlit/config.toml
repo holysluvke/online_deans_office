@@ -1,3 +1,7 @@
+[server]
+# Лимит на размер загружаемого фото в МБ. Держите равным MAX_UPLOAD_MB на бэкенде (backend/main.py)
+maxUploadSize = 10
+
 [theme]
 font = "sans serif"
 baseRadius = "large"

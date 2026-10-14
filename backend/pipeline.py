@@ -19,9 +19,9 @@
 Задача получит статус «Ошибка», а текст покажется на странице; остальные задачи не пострадают.
 
 doc_type - одно из:
-    "study_certificate"     справка об обучении
-    "academic_leave"        заявление на академический отпуск
-    "practice_certificate"  справка о практике
+    "study_certificate"           справка об обучении
+    "academic_leave_application"  заявление на академический отпуск
+    "internship_certificate"      справка о практике
 
 Что возвращают функции:
     extract_fields  -> словарь {имя_поля: значение}; не найденное поле = "не найдено", печать/подпись = True/False
@@ -34,7 +34,7 @@ import time
 def extract_fields(image_path: str, doc_type: str) -> dict:
     """ЗАГЛУШКА OCR: по фото вернуть поля документа."""
     #тестовая заглушка
-    time.sleep(2)  # притворяемся, что думаем
+    time.sleep(1)  # притворяемся, что думаем
     return {
         "fio": "Иванов Иван Иванович",
         "university": "Южный федеральный университет",
@@ -46,7 +46,7 @@ def extract_fields(image_path: str, doc_type: str) -> dict:
 def answer_question(fields: dict, doc_type: str, question: str) -> dict:
     """ЗАГЛУШКА RAG: по полям и вопросу вернуть ответ со ссылкой на пункт."""
     #тестовая заглушка
-    time.sleep(2)
+    time.sleep(1)
     return {
         "status": "missing",  # ok / missing / no_answer
         "message": "Не хватает даты выдачи и печати вуза. Эти поля обязательны по п. 3.4 Положения.",
