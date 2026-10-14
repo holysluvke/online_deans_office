@@ -30,6 +30,18 @@ doc_type - одно из:
 """
 import time
 
+from backend.knowledge import (
+    check_completeness,
+    field_lookup,
+    no_answer,
+    who_decides,
+)
+
+# Триггеры для классификации типа вопроса. Порядок проверок в _classify — по этому кортежу.
+# Узкие фразы идут первыми, чтобы Q3 не перехватывал Q1 или Q2.
+_WHO_DECIDES_TRIGGERS = ("кто принимает окончательное решение",)
+_COMPLETENESS_TRIGGERS = ("содержит ли документ все обязательные", "все обязательные сведения")
+_FIELD_LOOKUP_TRIGGERS = ("укажи значение поля", "значение поля")
 
 def extract_fields(image_path: str, doc_type: str) -> dict:
     """ЗАГЛУШКА OCR: по фото вернуть поля документа."""
@@ -42,13 +54,29 @@ def extract_fields(image_path: str, doc_type: str) -> dict:
         "stamp": False,
     }
 
+def _classify(question: str) -> str:
+    """Определяет тип вопроса: 'who_decides' | 'completeness' | 'field_lookup' | 'unknown'."""
+    q = question.lower().strip()
+    if any(t in q for t in _WHO_DECIDES_TRIGGERS):
+        return "who_decides"
+    if any(t in q for t in _COMPLETENESS_TRIGGERS):
+        return "completeness"
+    if any(t in q for t in _FIELD_LOOKUP_TRIGGERS):
+        return "field_lookup"
+    return "unknown"
+
 
 def answer_question(fields: dict, doc_type: str, question: str) -> dict:
-    """ЗАГЛУШКА RAG: по полям и вопросу вернуть ответ со ссылкой на пункт."""
-    #тестовая заглушка
-    time.sleep(1)
-    return {
-        "status": "missing",  # ok / missing / no_answer
-        "message": "Не хватает даты выдачи и печати вуза. Эти поля обязательны по п. 3.4 Положения.",
-        "sources": ["п. 3.4"],
-    }
+    """RAG: по полям документа и вопросу вернуть ответ со ссылкой на пункт Положения."""
+    kind = _classify(question)
+
+    if kind == "who_decides":
+        answer = who_decides()
+    elif kind == "completeness":
+        answer = check_completeness(fields, doc_type)
+    elif kind == "field_lookup":
+        answer = field_lookup(fields, doc_type, question) or no_answer()
+    else:
+        answer = no_answer()
+
+    return answer.to_dict()
