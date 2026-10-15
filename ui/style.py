@@ -129,7 +129,16 @@ h2, h3 {font-weight: 400 !important; letter-spacing: -0.01em;}
 [data-testid="stBaseButton-primary"]:hover:not(:disabled) {
     background: var(--text); transform: translateY(-1px); box-shadow: var(--shadow);
 }
-[data-testid="stBaseButton-primary"]:disabled {opacity: .35;}
+/* неактивная кнопка: контур с пунктиром и приглушённая подпись вместо сплошной заливки.
+   Так она хорошо видна на любом фоне, но сразу понятно, что пока нажать нельзя */
+[data-testid="stBaseButton-primary"]:disabled {
+    opacity: 1; cursor: not-allowed;
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--text) 50%, transparent);
+}
+[data-testid="stBaseButton-primary"]:disabled p {
+    color: color-mix(in srgb, var(--text) 65%, transparent) !important;
+}
 [data-testid="stBaseButton-secondary"] {background: transparent; border: 1px solid var(--muted);}
 [data-testid="stBaseButton-secondary"] p {color: var(--text) !important;}
 [data-testid="stBaseButton-secondary"] {margin-top: .6rem;}

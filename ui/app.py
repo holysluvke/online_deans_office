@@ -1,6 +1,7 @@
 import requests
 import streamlit as st
 from style import render_header
+import hashlib
 import html
 import re
 import uuid
@@ -69,8 +70,31 @@ too_many = len(files) > MAX_FILES
 if too_many:
     st.warning(f"За один раз можно отправить не больше {MAX_FILES} файлов, сейчас выбрано {len(files)}.")
 
-if st.button("Отправить на проверку", type="primary", disabled=not (files and question) or too_many):
-    for f in files:
+
+def fingerprint(f) -> str:
+    """Отпечаток отправки (содержимое файла + тип документа + вопрос): одинаковый отпечаток значит, что это та же отправка."""
+    digest = hashlib.sha256(f.getvalue()).hexdigest()[:16]
+    return f"{digest}|{DOC_TYPES[doc_label]}|{question.strip()}"
+
+
+def already_sent() -> set:
+    """Отпечатки отправок, задачи которых ещё есть на сервере (после очистки истории или через час файл можно слать снова)."""
+    sent = st.session_state.setdefault("sent", {})  # отпечаток -> номер задачи
+    try:
+        jobs = requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
+        alive = {j["job_id"] for j in jobs}
+    except (requests.RequestException, ValueError, TypeError, KeyError):
+        return set(sent)  # нет связи с сервером: считаем, что всё отправленное там осталось
+    return {fp for fp, job_id in sent.items() if job_id in alive}
+
+
+def send_files(batch: dict) -> None:
+    """Отправляет файлы на бэкенд (batch: отпечаток -> файл), запоминает номера задач, а причины отказов откладывает для показа."""
+    # Обращаемся к st.session_state один раз до цикла: Streamlit может прервать скрипт при очередном своём вызове
+    # (например, при быстром втором клике), и тогда уже отправленный файл остался бы незаписанным и ушёл бы второй раз
+    sent = st.session_state.setdefault("sent", {})
+    errors = st.session_state.setdefault("send_errors", [])
+    for fp, f in batch.items():
         try:
             resp = requests.post(
                 f"{API}/documents",
@@ -79,11 +103,36 @@ if st.button("Отправить на проверку", type="primary", disable
                 timeout=30,
             )
         except requests.RequestException:
-            st.error("Не удалось связаться с сервером. Запущен ли uvicorn?")
+            errors.append("Не удалось связаться с сервером. Запущен ли uvicorn?")
             break
-        if not resp.ok:
+        if resp.ok:
+            sent[fp] = resp.json()["job_id"]
+        else:
             # Бэкенд отклонил файл (не картинка и не PDF, слишком большой, очередь заполнена): показываем причину
-            st.error(f"{f.name}: {error_detail(resp)}")
+            errors.append(f"{f.name}: {error_detail(resp)}")
+
+
+# Делим выбранные файлы на новые и уже отправленные с этим же вопросом и типом документа.
+# Одинаковые файлы внутри одного выбора считаем одним.
+by_fp = {fingerprint(f): f for f in files} if question.strip() else {}
+sent_fps = already_sent() if by_fp else set()
+new_files = {fp: f for fp, f in by_fp.items() if fp not in sent_fps}
+sent_files = {fp: f for fp, f in by_fp.items() if fp in sent_fps}
+
+# Кнопка активна только если есть что отправлять: повторное нажатие ничего не дублирует
+if st.button("Отправить на проверку", type="primary", disabled=not new_files or too_many):
+    if new_files:  # на случай двойного клика: новое могло уже уйти в предыдущем запуске
+        send_files(new_files)
+    st.rerun()
+
+for message in st.session_state.pop("send_errors", []):
+    st.error(message)
+
+if sent_files:
+    st.info("Уже отправлено с этим вопросом: " + ", ".join(f.name for f in sent_files.values()) + ". Результат ниже.")
+    if st.button("Отправить повторно?"):
+        send_files(sent_files)
+        st.rerun()
 
 # ---------- Блок 2: очередь и результаты ----------
 st.subheader("2. Очередь и результаты")
