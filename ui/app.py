@@ -2,6 +2,7 @@ import hashlib
 import html
 import re
 import uuid
+import os
 
 import requests
 import streamlit as st
@@ -14,7 +15,7 @@ MAX_SHOWN = 20
 # посетителя в работе (MAX_ACTIVE_JOBS в backend/main.py), держите числа одинаковыми.
 MAX_FILES = 10
 
-API = "http://127.0.0.1:8000"
+API = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 # Ссылка на текст Положения для подвала и карточек результата (пока заглушка)
 
