@@ -324,15 +324,96 @@ def _marks(images: list, pages: list[dict]) -> tuple[bool, bool]:
     return signed, sealed
 
 
+def find_seals(image) -> list[list[int]]:
+    """Рамки круглых печатей на исходной картинке: [x, y, ширина, высота].
+
+    Печать — компактное круглое пятно цветных чернил (синих, красных, фиолетовых).
+    Чёрный текст, серая тень и длинные рукописные строки сюда не попадают.
+    """
+    import cv2
+
+    rgb = np.asarray(image.convert("RGB"))
+    height, width = rgb.shape[:2]
+    if height < 16 or width < 16:
+        return []
+    scale = min(1.0, 1200 / max(height, width))
+    if scale < 1:
+        small = cv2.resize(rgb, (max(1, int(width * scale)), max(1, int(height * scale))), interpolation=cv2.INTER_AREA)
+    else:
+        small = rgb
+    red = small[:, :, 0].astype(np.int16)
+    green = small[:, :, 1].astype(np.int16)
+    blue = small[:, :, 2].astype(np.int16)
+    lead = np.maximum(np.maximum(red, green), blue) - np.minimum(np.minimum(red, green), blue)
+    brightest = np.maximum(np.maximum(red, green), blue)
+    # Цветные чернила, не серая бумага и не чёрный шрифт.
+    ink = (lead > 18) & (brightest > 55) & (brightest < 248)
+    mask = ink.astype(np.uint8) * 255
+    short = min(mask.shape[:2])
+    kernel = max(3, int(short * 0.012) | 1)
+    ellipse = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel, kernel))
+    closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, ellipse)
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(closed, connectivity=8)
+    page_area = mask.shape[0] * mask.shape[1]
+    boxes = []
+    for index in range(1, count):
+        x, y, box_w, box_h, area = (int(v) for v in stats[index])
+        if box_w < 10 or box_h < 10:
+            continue
+        ratio = box_w / box_h
+        if not 0.7 <= ratio <= 1.45:
+            continue
+        box_area = box_w * box_h
+        if not 0.004 * page_area <= box_area <= 0.2 * page_area:
+            continue
+        extent = area / box_area
+        if not 0.08 <= extent <= 0.95:
+            continue
+        component = np.uint8(labels == index) * 255
+        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            continue
+        contour = max(contours, key=cv2.contourArea)
+        perimeter = cv2.arcLength(contour, True)
+        contour_area = cv2.contourArea(contour)
+        if perimeter <= 0 or contour_area <= 0:
+            continue
+        circularity = 4 * np.pi * contour_area / (perimeter * perimeter)
+        if circularity < 0.55:
+            continue
+        if len(contour) >= 5:
+            (_, _), (axis_a, axis_b), _ = cv2.fitEllipse(contour)
+            if min(axis_a, axis_b) / max(axis_a, axis_b) < 0.7:
+                continue
+        boxes.append([
+            int(round(x / scale)),
+            int(round(y / scale)),
+            max(1, int(round(box_w / scale))),
+            max(1, int(round(box_h / scale))),
+        ])
+    return _merge_seals(boxes)
+
+
+def _merge_seals(boxes: list[list[int]]) -> list[list[int]]:
+    """Двойное кольцо печати — одна рамка, а не две."""
+    ordered = sorted(boxes, key=lambda box: box[2] * box[3], reverse=True)
+    kept = []
+    for box in ordered:
+        center_x = box[0] + box[2] / 2
+        center_y = box[1] + box[3] / 2
+        inside = False
+        for other in kept:
+            if other[0] <= center_x <= other[0] + other[2] and other[1] <= center_y <= other[1] + other[3]:
+                inside = True
+                break
+        if not inside:
+            kept.append(box)
+    return kept
+
+
 def _page_marks(image, lines: list[dict]) -> tuple[bool, bool]:
     rgb = np.asarray(image.convert("RGB"))
     height, width = rgb.shape[:2]
-    red = rgb[:, :, 0].astype(np.int16)
-    green = rgb[:, :, 1].astype(np.int16)
-    blue = rgb[:, :, 2].astype(np.int16)
-    stamp = ((red > 140) & (red > green + 35) & (red > blue + 35)) | (
-        (blue > 140) & (blue > red + 30) & (blue > green + 15)
-    )
     covered = np.zeros((height, width), dtype=bool)
     for line in lines:
         x, y, box_w, box_h = (int(v) for v in line["bbox"])
@@ -345,4 +426,4 @@ def _page_marks(image, lines: list[dict]) -> tuple[bool, bool]:
     bottom = np.zeros((height, width), dtype=bool)
     bottom[int(height * 0.55):, :] = True
     signature = int((dark & bottom & ~covered).sum()) > 120
-    return signature, int(stamp.sum()) > 250
+    return signature, bool(find_seals(image))

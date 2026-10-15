@@ -1,4 +1,6 @@
 """Поля документа: плоский словарь, без моделей."""
+from pathlib import Path
+
 import pytest
 from PIL import Image, ImageDraw
 
@@ -118,6 +120,49 @@ def test_stamp_and_signature_are_bools():
     fields = pick_fields("study_certificate", {"pages": pages}, [image])
     assert fields["signature_present"] is True
     assert fields["seal_present"] is True
+
+
+def test_round_ink_stamp_is_caught_and_pen_lines_are_not():
+    from backend.ocr.fields import find_seals
+
+    ring = Image.new("RGB", (900, 700), "white")
+    draw = ImageDraw.Draw(ring)
+    draw.rectangle((40, 40, 500, 80), fill="black")
+    draw.ellipse((560, 420, 760, 620), outline=(25, 70, 170), width=7)
+    draw.ellipse((600, 460, 720, 580), outline=(25, 70, 170), width=4)
+    assert len(find_seals(ring)) == 1
+
+    pen = Image.new("RGB", (900, 700), "white")
+    draw = ImageDraw.Draw(pen)
+    for y in range(80, 500, 36):
+        draw.line((40, y, 820, y + 8), fill=(20, 60, 160), width=3)
+    assert find_seals(pen) == []
+
+    faded = Image.new("RGB", (900, 700), (245, 245, 245))
+    draw = ImageDraw.Draw(faded)
+    draw.ellipse((500, 360, 700, 560), outline=(90, 120, 170), width=8)
+    assert find_seals(faded)
+
+    pages = [{"text": "Справка", "lines": []}]
+    assert pick_fields("study_certificate", {"pages": pages}, [ring])["seal_present"] is True
+    assert pick_fields("study_certificate", {"pages": pages}, [pen])["seal_present"] is False
+
+
+def test_stamp_on_tilted_photo_is_one_seal():
+    path = Path("data/samples/spravka_bad.jpg")
+    if not path.is_file():
+        pytest.skip("нет примера справки")
+    from backend.ocr.fields import find_seals
+
+    photo = Image.open(path).convert("RGB")
+    assert find_seals(photo) == []
+    stamped = photo.copy()
+    draw = ImageDraw.Draw(stamped)
+    draw.ellipse((700, 360, 880, 540), outline=(30, 75, 180), width=8)
+    draw.ellipse((745, 405, 835, 495), outline=(30, 75, 180), width=5)
+    assert len(find_seals(stamped)) == 1
+    pages = [{"text": "Справка", "lines": []}]
+    assert pick_fields("study_certificate", {"pages": pages}, [stamped])["seal_present"] is True
 
 
 def test_extract_fields_returns_flat_dict(monkeypatch, tmp_path):
