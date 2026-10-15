@@ -335,7 +335,6 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 /* ---------- подвал ---------- */
 .footer {display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 28px; padding-top: 22px;
          font-size: .8rem; color: var(--muted);}
-.footer a {color: var(--text2) !important; text-decoration: none !important; display: inline-flex; gap: 6px; align-items: center;}
 
 /* ---------- плейсхолдер справа, пока ничего не отправлено ---------- */
 .empty {text-align: center; color: var(--muted); font-size: .85rem; padding: 36px 12px;}

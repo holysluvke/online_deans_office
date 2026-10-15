@@ -17,7 +17,6 @@ MAX_FILES = 10
 API = "http://127.0.0.1:8000"
 
 # Ссылка на текст Положения для подвала и карточек результата (пока заглушка)
-POLICY_URL = "#"
 
 DOC_TYPES = {
     "Справка об обучении": "study_certificate",
@@ -391,7 +390,8 @@ def result_view(job: dict) -> None:
         icon_name = "alert"
     elif status == "ok" and kind == "document_ok":
         title = "Обязательные сведения на месте"
-        text = message or "Окончательное решение принимает сотрудник деканата."
+        # «по пунктам 4.1, 4.2 Положения» убираем: пункты показаны в строке «Основание» ниже
+        text = re.sub(r"\s+по пунктам\s+[\d.,\s]+Положения", "", message) or "Окончательное решение принимает сотрудник деканата."
         icon_name = "circle_check"
     elif status == "ok":
         title = "Ответ найден"
@@ -546,7 +546,6 @@ with col_right:
     live_view()
 
 st.markdown(
-    html_line('<div class="footer"><span>Онлайн-деканат · Сервис проверки документов</span>',
-              f'<a href="{POLICY_URL}" target="_blank" rel="noopener">Положение о документах ', svg("arrow_ur", 14), "</a></div>"),
+    html_line('<div class="footer"><span>Онлайн-деканат · Сервис проверки документов</span></div>'),
     unsafe_allow_html=True,
 )
