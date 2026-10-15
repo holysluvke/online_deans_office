@@ -16,10 +16,26 @@ def test_dates_words_quotes_and_short_year():
     assert parse_dates("«15» сентября 2026") == ["2026-09-15"]
     assert parse_dates("01.09.26") == ["2026-09-01"]
     assert parse_dates("31.02.2026") == []
+    assert parse_dates("2026 сентября") == []
 
 
 def test_digit_lookalikes_stay_out_of_words():
     assert fix_digits("O1.O9.2O26") == "01.09.2026"
+    assert fix_digits("О8.12.2022") == "08.12.2022"
+    assert fix_digits("5о0") == "500"
+    assert fix_digits("1оо0") == "1000"
+    assert fix_digits("б0%") == "60%"
+    assert fix_digits("1.l.") == "1.1."
+    assert fix_digits("125Омм") == "1250мм"
+    assert fix_digits("Del1") == "Del1"
+    assert fix_digits("ОБ-1001") == "ОБ-1001"
+    assert fix_digits("Ряз004633") == "Ряз004633"
+    assert fix_digits("И.О.:") == "И.О.:"
+    assert fix_digits("г.о.") == "г.о."
+    assert fix_digits("M1I") == "M1I"
+    assert fix_digits("90о") == "900"
+    assert fix_digits("О0О") == "О0О"
+    assert fix_digits("ПриказУ0от") == "ПриказУ0от"
     assert fix_digits("Иванов") == "Иванов"
     assert fix_digits("по состоянию здоровья") == "по состоянию здоровья"
     assert parse_dates("O1.O9.2O26") == ["2026-09-01"]
@@ -88,13 +104,29 @@ def test_handwriting_rejects_latin_and_stops_after_the_limit():
         return "по семейным обстоятельствам"
 
     lines = [
-        {"text": f"строка {index}", "confidence": 0.1, "polygon": box}
+        {"text": f"qwe{index}", "confidence": 0.1, "polygon": box}
         for index in range(10)
     ]
     out = reread(image, lines, reader=reader)
     assert calls["n"] == 8
     assert all(line["source"] == "trocr" for line in out[:8])
     assert out[8]["source"] == "paddle" and out[9]["source"] == "paddle"
+
+    calls["n"] = 0
+    ordered = [{"text": "qhigh", "confidence": 0.45, "polygon": box}]
+    ordered += [{"text": f"q{index}", "confidence": 0.05, "polygon": box} for index in range(8)]
+    ranked = reread(image, ordered, reader=reader)
+    assert ranked[0]["source"] == "paddle"
+    assert all(line["source"] == "trocr" for line in ranked[1:])
+
+    def refuse(crop):
+        calls["n"] += 1
+        return "ерунда"
+
+    russian = [{"text": "отпуск по семейным", "confidence": 0.1, "polygon": box}]
+    skipped = reread(image, russian, reader=refuse)
+    assert calls["n"] == 8
+    assert skipped[0]["source"] == "paddle" and skipped[0]["text"] == "отпуск по семейным"
 
 
 def test_spoil_changes_the_photo_and_recall_counts_matches():

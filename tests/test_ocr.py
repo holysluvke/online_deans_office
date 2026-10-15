@@ -146,6 +146,46 @@ class TestPrepare:
         assert prepared.scale == pytest.approx(0.5)
         assert max(prepared.image.size) == 2600
 
+    def test_small_tilt_is_straightened(self):
+        from backend.ocr.preprocess import _skew_angle
+
+        img = Image.new("RGB", (640, 420), "white")
+        draw = ImageDraw.Draw(img)
+        for y in range(24, 400, 26):
+            draw.rectangle((16, y, 610, y + 5), fill="black")
+        tilted = img.rotate(15, expand=True, fillcolor="white")
+        prepared = prepare(tilted)
+        assert abs(_skew_angle(prepared.image)) < 2
+        assert abs(_skew_angle(prepare(img).image)) < 2
+
+    def test_rotation_matrix_lands_on_the_mark(self):
+        from backend.ocr.preprocess import Prepared, _rotation_matrix, map_to_page
+
+        img = Image.new("RGB", (220, 140), "white")
+        ImageDraw.Draw(img).rectangle((40, 30, 100, 80), fill="black")
+        angle = 15
+        matrix, new_size = _rotation_matrix(img.size, angle)
+        rotated = img.rotate(angle, resample=Image.NEAREST, expand=True, fillcolor="white")
+        assert rotated.size == new_size
+        gray = np.asarray(rotated.convert("L"))
+        ys, xs = np.where(gray < 20)
+        prepared = Prepared(rotated, 1.0, False, matrix)
+        page_x, page_y = map_to_page(float(np.median(xs)), float(np.median(ys)), prepared)
+        assert img.getpixel((int(round(page_x)), int(round(page_y))))[0] < 20
+
+    def test_shadow_does_not_hide_a_small_tilt(self):
+        from backend.ocr.preprocess import _skew_angle
+        from backend.ocr.spoil import spoil
+
+        img = Image.new("RGB", (640, 420), "white")
+        draw = ImageDraw.Draw(img)
+        for y in range(24, 400, 26):
+            draw.rectangle((16, y, 610, y + 5), fill="black")
+        damaged = spoil(img, turn=15, blur=0, scale=1, shadow=0.55)
+        prepared = prepare(damaged)
+        assert prepared.matrix is not None
+        assert abs(_skew_angle(prepared.image)) < 2
+
     def test_even_light_untouched(self):
         img, _ = draw_certificate()
         prepared = prepare(img)
@@ -161,6 +201,30 @@ class TestPrepare:
         left = np.percentile(gray[:, : gray.shape[1] // 10], 90)
         right = np.percentile(gray[:, -gray.shape[1] // 10 :], 90)
         assert abs(left - right) < 25
+
+
+def test_only_a_washed_out_page_is_sharpened():
+    from backend.ocr.preprocess import _is_soft
+
+    img = Image.new("RGB", (640, 420), (230, 226, 214))
+    draw = ImageDraw.Draw(img)
+    for y in range(20, 400, 16):
+        draw.line((16, y, 610, y), fill=(70, 60, 50), width=1)
+    assert _is_soft(img) is False
+    assert _is_soft(img.filter(ImageFilter.GaussianBlur(1.6))) is True
+
+
+def test_a_merely_small_frame_grows_to_the_ceiling():
+    img = Image.new("RGB", (1100, 760), (230, 226, 214))
+    draw = ImageDraw.Draw(img)
+    for y in range(24, 740, 18):
+        draw.line((20, y, 1060, y), fill=(70, 60, 50), width=1)
+    assert max(prepare(img).image.size) == 1600
+    mild = img.filter(ImageFilter.GaussianBlur(1.2))
+    prepared = prepare(mild)
+    assert max(prepared.image.size) == 2600
+    heavy = img.filter(ImageFilter.GaussianBlur(1.6))
+    assert max(prepare(heavy).image.size) == 1600
 
 
 def add_shadow(img: Image.Image) -> Image.Image:

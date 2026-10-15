@@ -2,8 +2,9 @@
 Вторая модель: рукописный русский через TrOCR (трансформер).
 
 Печатный PaddleOCR слабые строки не выкидывает в «не найдено».
-Если уверенность строки ниже порога, рамку вырезаем и читаем заново
-моделью kazars24/trocr-base-handwritten-ru. Её текст заменяет мусор Paddle.
+Если строка неуверенная и ещё не похожа на русский текст, рамку вырезаем
+и читаем заново моделью kazars24/trocr-base-handwritten-ru.
+Её текст заменяет мусор Paddle, только когда он читается лучше.
 Если рукописная модель тоже ничего не вернула, остаётся текст Paddle.
 """
 import os
@@ -100,24 +101,43 @@ def _better(paddle: str, handwritten: str) -> bool:
     return hand_cyr > paddle_cyr
 
 
+_VOWEL = re.compile(r"[аеёиоуыэюя]", re.IGNORECASE)
+
+
+def _garbage(line: dict) -> bool:
+    """Уже русскую строку второй модели не отдаём: восемь вызовов тратятся впустую."""
+    if line["confidence"] >= MIN_CONFIDENCE:
+        return False
+    text = line.get("text") or ""
+    cyrillic = len(re.findall(r"[А-Яа-яЁё]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    return not (cyrillic >= 4 and cyrillic >= latin)
+
+
+def _readable(text: str) -> bool:
+    """Галлюцинация без гласной или числа не заменяет строку Paddle."""
+    stripped = text.strip()
+    if _VOWEL.search(stripped):
+        return True
+    return bool(re.fullmatch(r"[\d\s./\-–—]+", stripped) and re.search(r"\d", stripped))
+
+
 def reread(image: Image.Image, lines: list[dict], reader=read_crop) -> list[dict]:
     """
-    Строки с уверенностью ниже порога читает рукописная модель.
-    Уверенные печатные строки не трогает. Латиницу вместо кириллицы не берёт.
+    Слабую нерусскую строку читает рукописная модель, сначала самую неуверенную.
+    Уверенный текст и уже русские строки не трогает. Латиницу вместо кириллицы не берёт.
     """
     out = []
-    budget = MAX_REREAD
     for line in lines:
         copied = dict(line)
         copied["source"] = "paddle"
-        if line["confidence"] >= MIN_CONFIDENCE or budget <= 0:
-            out.append(copied)
-            continue
-        budget -= 1
-        crop = _crop(image, line["polygon"])
-        handwritten = " ".join((reader(crop) if crop is not None else "").split())
-        if _better(copied["text"], handwritten):
-            copied["text"] = handwritten
-            copied["source"] = "trocr"
         out.append(copied)
+    order = [index for index, line in enumerate(lines) if _garbage(line)]
+    order.sort(key=lambda index: lines[index]["confidence"])
+    for index in order[:MAX_REREAD]:
+        crop = _crop(image, lines[index]["polygon"])
+        handwritten = " ".join((reader(crop) if crop is not None else "").split())
+        if _better(out[index]["text"], handwritten) and _readable(handwritten):
+            out[index]["text"] = handwritten
+            out[index]["source"] = "trocr"
     return out

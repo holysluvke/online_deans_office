@@ -66,7 +66,7 @@ def run_ocr(path: str | Path) -> dict:
         raw_lines, turns = engine.recognize(prepared.image)
         if enabled():
             raw_lines = reread(prepared.image, raw_lines)
-        lines = [_to_page_coords(l, prepared.scale, page.image.size) for l in raw_lines]
+        lines = [_to_page_coords(l, prepared, page.image.size) for l in raw_lines]
         text = page_text(lines)
         if not text:
             warnings.append(f"Текст не найден на странице {page.index + 1}")
@@ -98,14 +98,15 @@ def run_ocr(path: str | Path) -> dict:
     }
 
 
-def _to_page_coords(line: dict, scale: float, size: tuple[int, int]) -> dict:
+def _to_page_coords(line: dict, prepared, size: tuple[int, int]) -> dict:
     from backend.ocr.engine import MIN_CONFIDENCE
+    from backend.ocr.preprocess import map_to_page
 
     width, height = size
-    polygon = [
-        [round(min(max(x / scale, 0), width - 1), 1), round(min(max(y / scale, 0), height - 1), 1)]
-        for x, y in line["polygon"]
-    ]
+    polygon = []
+    for x, y in line["polygon"]:
+        px, py = map_to_page(x, y, prepared)
+        polygon.append([round(min(max(px, 0), width - 1), 1), round(min(max(py, 0), height - 1), 1)])
     xs = [p[0] for p in polygon]
     ys = [p[1] for p in polygon]
     left, top = int(min(xs)), int(min(ys))
