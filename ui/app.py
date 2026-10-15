@@ -55,8 +55,8 @@ if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", session_id):  # тот же фор�
     session_id = uuid.uuid4().hex
     st.query_params["s"] = session_id
 
-# ---------- Блок 1: загрузка ----------
-st.subheader("1. Загрузите документ")
+# ---------- Блок «Загрузка документов» (виден всегда) ----------
+st.subheader("Загрузка документов")
 
 doc_label = st.selectbox("Тип документа", list(DOC_TYPES))
 question = st.text_input("Ваш вопрос", placeholder="Достаточно ли справки для перевода на 2 курс?")
@@ -129,18 +129,18 @@ for message in st.session_state.pop("send_errors", []):
     st.error(message)
 
 if sent_files:
-    st.info("Уже отправлено с этим вопросом: " + ", ".join(f.name for f in sent_files.values()) + ". Результат ниже.")
     if st.button("Отправить повторно?"):
         send_files(sent_files)
         st.rerun()
 
-# ---------- Блок 2: очередь и результаты ----------
-st.subheader("2. Очередь и результаты")
-# Срок совпадает с JOB_TTL_MINUTES в backend/cleanup.py
-st.caption("Фото и результаты хранятся час, потом удаляются автоматически.")
+# ---------- Блоки «Очередь проверки» и «Результаты» ----------
+# Появляются по шагам: очередь, когда у посетителя есть хотя бы одна задача, результаты, когда
+# готова хотя бы одна. Рисуются внутри одного фрагмента: он сам обновляется раз в 2 секунды,
+# не трогая форму загрузки выше (файлы и вопрос не сбрасываются).
 
 
 def show_result(job: dict) -> None:
+    """Рисует карточку результата одной готовой задачи (вердикт, источник и распознанные поля)."""
     result = job["result"] or {}
     color, title = RESULT_STYLE.get(result.get("status"), ("var(--muted)", "РЕЗУЛЬТАТ"))
     sources = ", ".join(map(str, result.get("sources") or []))
@@ -150,7 +150,7 @@ def show_result(job: dict) -> None:
     seen.add(job["job_id"])
     st.markdown(
         f"""<div class="result {fresh}" style="border-left-color:{color}">
-        <div class="tag" style="color:{color}">{title}</div>
+        <div class="tag" style="color:{color}">{title} · {html.escape(job['filename'])}</div>
         {html.escape(str(result.get("message", "")))}
         <div class="src">{"источник: " + html.escape(sources) if sources else ""}</div>
         </div>""",
@@ -159,41 +159,71 @@ def show_result(job: dict) -> None:
     with st.expander("Распознанные поля"):
         st.json(job["fields"])
 
+
+def stage_text(job: dict) -> str:
+    """Подпись этапа по статусу и прогрессу (прогресс задаёт backend/jobs.py: 10 - OCR, 60 - поиск ответа)."""
+    if job["status"] == "queued":
+        return "Ждёт своей очереди"
+    if job["progress"] < 60:
+        return "Распознаю текст на документе"
+    return "Сверяю с Положением и готовлю ответ"
+
+
+def stage_html(job: dict) -> str:
+    """Строка «этап + процент» для документа в работе; у готовых и упавших пустая."""
+    if job["status"] not in ("queued", "processing"):
+        return ""
+    percent = f"{job['progress']}%" if job["status"] == "processing" else ""
+    return f'<div class="stage"><span>{stage_text(job)}</span><span>{percent}</span></div>'
+
+
+def show_queue(jobs: list) -> None:
+    """Рисует карточки очереди: имя файла, статус и полоса прогресса (ошибки показываются здесь же)."""
+    st.subheader("Очередь проверки")
+    # Срок совпадает с JOB_TTL_MINUTES в backend/cleanup.py
+    st.caption("Фото и результаты хранятся час, потом удаляются автоматически.")
+    if len(jobs) > MAX_SHOWN:
+        st.caption(f"Показаны последние {MAX_SHOWN} из {len(jobs)}")
+    for job in reversed(jobs[-MAX_SHOWN:]):
+        # HTML одной строкой без отступов и пустых строк: иначе Markdown примет его за блок кода
+        st.markdown(
+            f'<div class="job {job["status"]}">'
+            f'<div class="job-top"><span class="name">{html.escape(job["filename"])}</span>'
+            f'<span class="pill">{STATUS_TEXT.get(job["status"], job["status"])}</span></div>'
+            f'{stage_html(job)}'
+            f'<div class="bar"><span style="width:{job["progress"]}%"></span></div></div>',
+            unsafe_allow_html=True,
+        )
+        if job["status"] == "error":
+            st.error(job["error"] or "Неизвестная ошибка")
+
+
 @st.fragment(run_every=2)  # этот кусок сам обновляется каждые 2 секунды
-def queue_view() -> None:
-    """Блок очереди: раз в 2 секунды берёт у бэкенда список задач и рисует карточки."""
+def live_view() -> None:
+    """Раз в 2 секунды берёт у бэкенда задачи посетителя и показывает блоки очереди и результатов, когда им есть что показать."""
     try:
         jobs = requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
     except (requests.RequestException, ValueError):
         st.error("Нет связи с сервером.")
         return
     if not jobs:
-        st.write("Пока пусто. Загрузите документ выше.")
-        return
-    if len(jobs) > MAX_SHOWN:
-        st.caption(f"Показаны последние {MAX_SHOWN} из {len(jobs)}")
-    for job in reversed(jobs[-MAX_SHOWN:]):
-        st.markdown(
-            f"""<div class="job {job['status']}">
-                <div class="job-top">
-                    <span class="name">{html.escape(job['filename'])}</span>
-                    <span class="pill">{STATUS_TEXT.get(job['status'], job['status'])}</span>
-                </div>
-                <div class="bar"><span style="width:{job['progress']}%"></span></div>
-            </div>""",
-            unsafe_allow_html=True,
-        )
-        if job["status"] == "done":
+        return  # ничего не отправлено: показываем только блок загрузки
+
+    show_queue(jobs)
+
+    done = [j for j in jobs if j["status"] == "done"]
+    if done:
+        st.subheader("Результаты")
+        for job in reversed(done[-MAX_SHOWN:]):
             show_result(job)
-        elif job["status"] == "error":
-            st.error(job["error"] or "Неизвестная ошибка")
+
+    # Удаляет завершённые задачи этого посетителя вместе с фото; задачи в работе остаются
+    if st.button("Очистить историю"):
+        try:
+            requests.delete(f"{API}/jobs", params={"session_id": session_id}, timeout=10)
+        except requests.RequestException:
+            st.error("Нет связи с сервером.")
+        st.rerun()  # полный перезапуск: кнопка отправки узнает, что отправленного больше нет
 
 
-queue_view()
-# Удаляет завершённые задачи этого посетителя вместе с фото; задачи в работе остаются
-if st.button("Очистить историю"):
-    try:
-        requests.delete(f"{API}/jobs", params={"session_id": session_id}, timeout=10)
-    except requests.RequestException:
-        st.error("Нет связи с сервером.")
-    st.rerun()
+live_view()

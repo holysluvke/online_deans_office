@@ -17,6 +17,8 @@
     .result, .tag, .src                  карточка ответа
     .tagline                             строка над заголовком
 """
+import time
+
 import streamlit as st
 
 CSS = """
@@ -107,10 +109,23 @@ h2, h3 {font-weight: 400 !important; letter-spacing: -0.01em;}
        color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent);}
 .pill::before {content: ""; width: 6px; height: 6px; border-radius: 50%;
                background: var(--c); margin-right: 8px;}
-.bar {height: 4px; border-radius: 999px; background: var(--line); margin-top: 12px; overflow: hidden;}
+.bar {height: 8px; border-radius: 999px; background: var(--line); margin-top: 12px; overflow: hidden;}
 .bar span {display: block; height: 100%; border-radius: 999px;
-           background: var(--bar);}
-.job.done .bar {display: none;}  /* у готовых карточек линия не нужна */
+           background: var(--bar); transition: width .6s ease;}
+/* в работе: бегущие полосы на заполненной части, чтобы было видно, что процесс идёт */
+.job.processing .bar span {
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.22) 0 8px, transparent 8px 16px);
+    background-size: 22.6px 22.6px; animation: bar-move 1s linear infinite;}
+@keyframes bar-move {to {background-position: 22.6px 0;}}
+/* в очереди: неопределённая полоса, которая бежит туда-сюда (сколько ждать, неизвестно) */
+.job.queued .bar span {width: 30% !important; background: var(--muted); opacity: .6;
+                       animation: bar-wait 1.4s ease-in-out infinite alternate;}
+@keyframes bar-wait {from {margin-left: 0;} to {margin-left: 70%;}}
+.job.done .bar, .job.error .bar {display: none;}  /* у готовых и упавших линия не нужна */
+/* строка под именем: что делается сейчас и сколько процентов */
+.stage {display: flex; justify-content: space-between; margin-top: 8px;
+        color: var(--muted); font-size: .8rem;}
+@media (prefers-reduced-motion: reduce) {.job .bar span {animation: none !important;}}
 /* карточка ответа (app.py, функция show_result); цвет левой черты задаёт app.py */
 .result {background: var(--card); border: 1px solid var(--line); border-left-width: 4px;
          border-radius: 16px; padding: 14px 18px; margin: 8px 0 4px 0;}
@@ -152,13 +167,57 @@ h2, h3 {font-weight: 400 !important; letter-spacing: -0.01em;}
 [data-testid="stExpander"] details {
     background: var(--card); border: 1px solid var(--line); border-radius: 16px;
 }
+/* ---------- заставка при первом входе (функция intro_html ниже) ----------
+   Название на весь экран, затем оно уменьшается и уезжает на место заголовка страницы.
+   Конечные left/top совпадают с положением текста настоящего h1 (колонка 704px по центру, 171px от верха).
+   Фон держится почти до конца пути, чтобы настоящий заголовок не просвечивал рядом с едущим. */
+.intro {position: fixed; inset: 0; z-index: 1000000; pointer-events: none;
+        animation: intro-hide 3.2s linear both;}
+.intro-bg {position: absolute; inset: 0; background: var(--bg);
+           animation: intro-bg 3.2s ease-in-out both;}
+.intro-title {position: absolute; color: var(--text); white-space: nowrap; font-weight: 300;
+              letter-spacing: -0.02em; line-height: 1.15;
+              animation: intro-title 3.2s cubic-bezier(.65,0,.25,1) both;}
+@keyframes intro-title {
+    0%   {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(2.8rem, 10vw, 7.5rem); opacity: 0;}
+    20%  {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(2.8rem, 10vw, 7.5rem); opacity: 1;}
+    45%  {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(2.8rem, 10vw, 7.5rem); opacity: 1;}
+    90%  {left: max(16px, calc((100vw - 704px) / 2)); top: 171px; transform: translate(0, 0); font-size: 2.6rem; opacity: 1;}
+    99%  {left: max(16px, calc((100vw - 704px) / 2)); top: 171px; transform: translate(0, 0); font-size: 2.6rem; opacity: 1;}
+    100% {left: max(16px, calc((100vw - 704px) / 2)); top: 171px; transform: translate(0, 0); font-size: 2.6rem; opacity: 0;}
+}
+@keyframes intro-bg {0%, 82% {opacity: 1;} 98%, 100% {opacity: 0;}}
+@keyframes intro-hide {0%, 99% {visibility: visible;} 100% {visibility: hidden;}}
+@media (max-width: 600px) {
+    @keyframes intro-title {
+        0%   {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 2.8rem; opacity: 0;}
+        20%, 45% {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 2.8rem; opacity: 1;}
+        90%, 99% {left: 16px; top: 190px; transform: translate(0, 0); font-size: 2.6rem; opacity: 1;}
+        100% {left: 16px; top: 190px; transform: translate(0, 0); font-size: 2.6rem; opacity: 0;}
+    }
+}
+@media (prefers-reduced-motion: reduce) {.intro {display: none;}}
 </style>
 """
 
 
+# Сколько секунд после первого захода показывать заставку (чуть больше длительности анимации в CSS)
+INTRO_SECONDS = 3.6
+
+
+def intro_html() -> str:
+    """Разметка заставки, пока идёт первый заход посетителя; потом пустая строка (место в странице остаётся тем же)."""
+    started = st.session_state.setdefault("intro_started", time.time())
+    if time.time() - started > INTRO_SECONDS:
+        return "<span></span>"
+    # Повторный перезапуск скрипта внутри этого окна не перезапускает анимацию: тот же элемент остаётся на месте
+    return '<div class="intro"><div class="intro-bg"></div><div class="intro-title">Онлайн-деканат</div></div>'
+
+
 def render_header() -> None:
-    """Подключает стили и рисует шапку страницы."""
+    """Подключает стили, показывает заставку при первом входе и рисует шапку страницы."""
     st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(intro_html(), unsafe_allow_html=True)
     st.markdown(
         '<div class="tagline">Цифровой секретарь · OCR → поля → Положение</div>',
         unsafe_allow_html=True,
