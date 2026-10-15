@@ -190,6 +190,26 @@ def render_stepper(n_files: int, jobs: list) -> None:
     st.markdown(f'<div class="stepper">{"".join(parts)}</div>', unsafe_allow_html=True)
 
 
+# Поле документа -> подпись для списка «Распознанные поля»
+FIELD_LABELS = {
+    "student_name": "ФИО студента", "university": "Название вуза", "program": "Направление подготовки",
+    "study_form": "Форма обучения", "study_start": "Начало обучения", "study_end": "Окончание обучения",
+    "document_number": "Номер документа", "issue_date": "Дата выдачи", "group": "Учебная группа", "course": "Курс",
+    "leave_reason": "Причина отпуска", "leave_start": "Начало отпуска", "leave_end": "Окончание отпуска",
+    "application_date": "Дата заявления", "organization": "Организация", "internship_start": "Начало практики",
+    "internship_end": "Окончание практики", "supervisor_name": "Руководитель практики", "grade": "Оценка",
+    "signature_present": "Подпись", "seal_present": "Печать",
+}
+# Флаги подписи и печати: подпись зависит от типа документа
+FLAG_LABELS = {
+    ("signature_present", "study_certificate"): "Подпись сотрудника",
+    ("signature_present", "academic_leave_application"): "Подпись студента",
+    ("signature_present", "internship_certificate"): "Подпись руководителя",
+    ("seal_present", "study_certificate"): "Печать вуза",
+    ("seal_present", "internship_certificate"): "Печать организации",
+}
+
+
 def missing_issues(job: dict) -> list:
     """Чего не хватает на документе: берёт missing_fields из ответа бэкенда, запасной путь - пустые поля."""
     result = job.get("result") or {}
@@ -332,6 +352,23 @@ with col_left:
         st.rerun()  # полный перезапуск: кнопка отправки узнает, что отправленного больше нет
 
 
+def fields_view(job: dict) -> str:
+    """Распознанные поля списком: галочка - нашлось, крестик - нет (вместо сырого JSON)."""
+    rows = []
+    for key, value in (job.get("fields") or {}).items():
+        label = FLAG_LABELS.get((key, job.get("doc_type")), FIELD_LABELS.get(key, key))
+        if isinstance(value, bool):  # подпись / печать
+            found, shown = value, "Есть" if value else "Нет"
+        else:
+            found = value not in ("не найдено", None, "")
+            shown = re.sub(r"^(\d{4})-(\d{2})-(\d{2})$", r"\3.\2.\1", str(value)) if found else "не найдено"  # 2026-09-01 -> 01.09.2026
+        rows.append(html_line(
+            '<div class="frow">', f'<span class="f-ic {"yes" if found else "no"}">', svg("check" if found else "x", 14), "</span>",
+            f'<span class="f-label">{html.escape(label)}</span>',
+            f'<span class="f-val{"" if found else " none"}">{html.escape(shown)}</span></div>'))
+    return '<div class="fields">' + "".join(rows) + "</div>" if rows else ""
+
+
 def result_view(job: dict) -> None:
     """Карточка результата одной готовой задачи: вердикт, что не найдено, основание и распознанные поля."""
     result = job["result"] or {}
@@ -394,7 +431,7 @@ def result_view(job: dict) -> None:
             unsafe_allow_html=True,
         )
         with st.expander("Распознанные поля"):
-            st.json(job["fields"])
+            st.markdown(fields_view(job), unsafe_allow_html=True)
 
 
 def toggle(flag: str) -> None:
