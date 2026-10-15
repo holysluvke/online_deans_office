@@ -29,13 +29,15 @@ class Answer:
     missing_fields: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        """Словарь для answer_question — 6 полей, включая missing_fields."""
         return {
-        "status":     self.status,
-        "message":    self.message,
-        "sources":    self.sources,
-        "answerable": self.answerable,
-        "value":      self.value,
-    }
+            "status":         self.status,
+            "message":        self.message,
+            "sources":        self.sources,
+            "answerable":     self.answerable,
+            "value":          self.value,
+            "missing_fields": self.missing_fields,
+        }
 
 
 def who_decides() -> Answer:

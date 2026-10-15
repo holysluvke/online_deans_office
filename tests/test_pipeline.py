@@ -1,21 +1,33 @@
-"""Локальная проверка answer_question на эталонных полях из reference_results.json."""
+"""Интеграционный тест: матчинг + evaluate.py на эталонных данных."""
 import json
+from pathlib import Path
+
+import pytest
 
 from backend.knowledge import check_completeness
 from backend.pipeline import answer_question
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-def build_results(reference_path: str, questions_path: str) -> dict:
-    with open(reference_path, encoding="utf-8") as f:
-        ref = json.load(f)
-    with open(questions_path, encoding="utf-8") as f:
-        questions = json.load(f)
 
-    q_by_doc: dict[str, list[dict]] = {}
+def _load_json(name: str) -> dict:
+    path = PROJECT_ROOT / name
+    if not path.is_file():
+        pytest.skip(f"Нет файла организаторов: {name}")
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _build_results(reference: dict, questions: list[dict]) -> dict:
+    """Собирает results.json из эталона — без записи на диск."""
+    questions_by_doc: dict[str, list[dict]] = {}
     for q in questions:
-        q_by_doc.setdefault(q["document_id"], []).append(q)
+        questions_by_doc.setdefault(q["document_id"], []).append(q)
 
-    documents = [_document_result(doc, q_by_doc[doc["document_id"]]) for doc in ref["documents"]]
+    documents = [
+        _document_result(doc, questions_by_doc[doc["document_id"]])
+        for doc in reference["documents"]
+    ]
     return {"version": "1.0", "documents": documents}
 
 
@@ -48,8 +60,20 @@ def _answer_result(fields: dict, doc_type: str, question: dict) -> dict:
     }
 
 
-if __name__ == "__main__":
-    result = build_results("reference_results.json", "questions.json")
-    with open("results_mine.json", "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
-    print(f"saved results_mine.json: {len(result['documents'])} documents")
+# Тест
+
+def test_evaluate_returns_perfect_scores_on_reference():
+    """Полный прогон: answer_question на эталоне → evaluate.py → 1.0 по трём метрикам."""
+    from evaluate import evaluate   # evaluate.py лежит в корне
+
+    reference = _load_json("reference_results.json")
+    questions = _load_json("questions.json")
+
+    predictions = _build_results(reference, questions)
+    report = evaluate(reference, predictions)
+
+    assert report["format_valid"] is True
+    assert report["errors"] == []
+    assert report["field_accuracy_macro"] == 1.0
+    assert report["validation_exact_match"] == 1.0
+    assert report["question_exact_match"] == 1.0
