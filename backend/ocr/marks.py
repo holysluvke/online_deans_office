@@ -1,6 +1,7 @@
 """Подпись и печать.
 
 Слова «Подпись» и «М.П.» сами по себе отметкой не считаются.
+Подпись — чернила на полосе строки «Подпись», по всей её длине и чуть ниже. Пустая линия — не подпись.
 Печать — круглое или прямоугольное пятно цветных чернил.
 У заявления на отпуск печати нет: для этого типа её не ищем.
 """
@@ -9,7 +10,8 @@ import re
 import numpy as np
 
 LEAVE_TYPES = {"academic_leave", "academic_leave_application"}
-_MARK_WORD = re.compile(r"подпись|м\s*\.?\s*п", flags=re.IGNORECASE)
+_SIGNATURE_WORD = re.compile(r"подпись", flags=re.IGNORECASE)
+_PLACE_WORD = re.compile(r"м\s*\.?\s*п", flags=re.IGNORECASE)
 
 
 def detect_marks(images, ocr_pages, doc_type: str) -> tuple[bool, bool]:
@@ -19,9 +21,10 @@ def detect_marks(images, ocr_pages, doc_type: str) -> tuple[bool, bool]:
     sealed = False
     for image, page in zip(images or [], ocr_pages or []):
         lines = page.get("lines", [])
-        signed = signed or _signature_near_label(image, lines)
+        seals = find_seals(image)
+        signed = signed or _signature_near_label(image, lines, seals)
         if want_seal:
-            sealed = sealed or bool(find_seals(image))
+            sealed = sealed or bool(seals)
     return signed, sealed
 
 
@@ -120,54 +123,43 @@ def _merge_seals(boxes: list[list[int]]) -> list[list[int]]:
     return kept
 
 
-def _signature_near_label(image, lines: list[dict]) -> bool:
-    """Тонкий тёмный росчерк рядом со словом «Подпись» или «М.П.».
-
-    Само слово и прямая линия под ним отметкой не являются.
-    """
+def _signature_near_label(image, lines: list[dict], seals: list[list[int]] | None = None) -> bool:
+    """Полоса у слова «Подпись»: вся длина строки и запас вниз. Чернила там — подпись есть."""
     import cv2
 
     rgb = np.asarray(image.convert("RGB"))
     height, width = rgb.shape[:2]
     if height < 16 or width < 16:
         return False
-    anchors = []
-    for line in lines:
-        if not _MARK_WORD.search(str(line.get("text", ""))):
-            continue
-        bbox = line.get("bbox")
-        if not bbox or len(bbox) < 4:
-            continue
-        anchors.append(tuple(int(v) for v in bbox[:4]))
+    anchors = _boxes(lines, _SIGNATURE_WORD)
     if not anchors:
         return False
 
-    covered = np.zeros((height, width), dtype=bool)
-    for line in lines:
-        bbox = line.get("bbox")
-        if not bbox or len(bbox) < 4:
-            continue
-        x, y, box_w, box_h = (int(v) for v in bbox[:4])
-        x1, y1 = max(0, x - 3), max(0, y - 3)
-        x2, y2 = min(width, x + box_w + 3), min(height, y + box_h + 3)
-        covered[y1:y2, x1:x2] = True
-
-    dark = rgb.mean(axis=2) < 55
     window = np.zeros((height, width), dtype=bool)
-    reach = max(80, int(width * 0.35))
     for x, y, box_w, box_h in anchors:
         box_h = max(box_h, 8)
-        right_x1 = min(width, x + box_w + 2)
-        right_x2 = min(width, x + box_w + reach)
-        right_y1 = max(0, y - box_h)
-        right_y2 = min(height, y + box_h * 3 + 8)
-        window[right_y1:right_y2, right_x1:right_x2] = True
-        below_y1 = min(height, y + box_h + 2)
-        below_y2 = min(height, y + box_h * 4 + 8)
-        below_x2 = min(width, x + max(box_w * 4, reach))
-        window[below_y1:below_y2, max(0, x):below_x2] = True
+        rise = max(box_h, 18)
+        drop = max(box_h * 4, 48)
+        y1 = max(0, y - rise)
+        y2 = min(height, y + box_h + drop)
+        window[y1:y2, x:width] = True
 
-    ink = dark & window & ~covered
+    # Печать и «М.П.» — не место для подписи.
+    for x, y, box_w, box_h in seals or []:
+        x1, y1 = max(0, x - 4), max(0, y - 4)
+        x2, y2 = min(width, x + box_w + 4), min(height, y + box_h + 4)
+        window[y1:y2, x1:x2] = False
+    for x, y, box_w, box_h in _boxes(lines, _PLACE_WORD):
+        x1, x2 = max(0, x - 8), min(width, x + box_w + 8)
+        window[:, x1:x2] = False
+    for x, y, box_w, box_h in anchors:
+        x1, y1 = max(0, x - 2), max(0, y - 2)
+        x2, y2 = min(width, x + box_w + 2), min(height, y + box_h + 2)
+        window[y1:y2, x1:x2] = False
+
+    gray = rgb.mean(axis=2)
+    chroma = rgb.max(axis=2).astype(np.int16) - rgb.min(axis=2).astype(np.int16)
+    ink = window & ((gray < 170) | ((chroma > 28) & (gray < 225)))
     if int(ink.sum()) < 40:
         return False
     count, _, stats, _ = cv2.connectedComponentsWithStats(ink.astype(np.uint8) * 255, connectivity=8)
@@ -175,10 +167,17 @@ def _signature_near_label(image, lines: list[dict]) -> bool:
         _, _, box_w, box_h, area = (int(v) for v in stats[index])
         if area < 40 or box_w < 8 or box_h < 8:
             continue
-        # Прямая линия для подписи, не росчерк.
-        if box_h <= 6 and box_w >= 25:
-            continue
-        if box_w / max(box_h, 1) >= 7:
-            continue
         return True
     return False
+
+
+def _boxes(lines: list[dict], pattern: re.Pattern) -> list[tuple[int, int, int, int]]:
+    found = []
+    for line in lines:
+        if not pattern.search(str(line.get("text", ""))):
+            continue
+        bbox = line.get("bbox")
+        if not bbox or len(bbox) < 4:
+            continue
+        found.append(tuple(int(v) for v in bbox[:4]))
+    return found
