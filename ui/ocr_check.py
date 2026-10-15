@@ -16,7 +16,8 @@ import streamlit as st
 from PIL import Image, ImageDraw
 
 from backend.ocr import OcrError, load_document, run_ocr, save_result
-from backend.ocr.fields import MISSING, find_seals, pick_fields
+from backend.ocr.fields import MISSING, pick_fields
+from backend.ocr.marks import find_seals
 from backend.pipeline import answer_question
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,7 +72,12 @@ def draw_boxes(image: Image.Image, lines: list[dict], seals: list[list[int]]) ->
             color = (20, 140, 60)
         draw.polygon([tuple(p) for p in line["polygon"]], outline=color, width=3)
     for x, y, box_w, box_h in seals:
-        draw.ellipse((x, y, x + box_w, y + box_h), outline=(20, 80, 220), width=5)
+        box = (x, y, x + box_w, y + box_h)
+        ratio = box_w / max(box_h, 1)
+        if 0.75 <= ratio <= 1.35:
+            draw.ellipse(box, outline=(20, 80, 220), width=5)
+        else:
+            draw.rectangle(box, outline=(20, 80, 220), width=5)
     return shown
 
 
@@ -201,7 +207,7 @@ def check(path: Path, doc_type: str, question: str) -> None:
         st.image(
             draw_boxes(pages[index].image, page["lines"], seals),
             caption="Зелёная рамка — строка текста. Оранжевая — её переписал трансформер. "
-                    "Красная — модель текста не уверена. Синий круг — найденная печать.",
+                    "Красная — модель текста не уверена. Синяя рамка — найденная печать.",
         )
     with flow_col:
         st.subheader("Куда уходит")
