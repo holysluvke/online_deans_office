@@ -52,6 +52,8 @@ __all__ = ["OcrError", "run_ocr", "save_result"]
 def run_ocr(path: str | Path) -> dict:
     from backend.ocr import engine
 
+    from backend.ocr.handwriting import MODEL_ID, enabled, reread
+
     path = Path(path)
     started = time.perf_counter()
     fmt, pages = load_document(path)
@@ -62,9 +64,8 @@ def run_ocr(path: str | Path) -> dict:
     for page in pages:
         prepared = prepare(page.image)
         raw_lines, turns = engine.recognize(prepared.image)
-        from backend.ocr.handwriting import reread
-
-        raw_lines = reread(prepared.image, raw_lines)
+        if enabled():
+            raw_lines = reread(prepared.image, raw_lines)
         lines = [_to_page_coords(l, prepared.scale, page.image.size) for l in raw_lines]
         text = page_text(lines)
         if not text:
@@ -86,7 +87,7 @@ def run_ocr(path: str | Path) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "source": {"file": path.name, "format": fmt, "pages": len(pages)},
-        "engine": {**engine.engine_info(), "handwriting": "kazars24/trocr-base-handwritten-ru"},
+        "engine": {**engine.engine_info(), "handwriting": MODEL_ID if enabled() else "выключен"},
         "text": full_text,
         "pages": out_pages,
         "warnings": warnings,

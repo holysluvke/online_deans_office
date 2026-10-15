@@ -10,11 +10,22 @@
 по порядку дат в документе: либо подпись «Дата начала…» / «Дата окончания…»,
 либо пара дат на одной строке периода.
 """
-import datetime
 import re
 
 from backend.ocr.marks import detect_marks
 from backend.ocr.marks import find_seals as find_seals
+from backend.ocr.normalize import (
+    FORMS,
+    GRADES,
+    REASONS,
+    closed_or_raw,
+    closest_label,
+    fix_digits,
+    number_for,
+    ordered_span,
+    parse_dates,
+    snap,
+)
 
 MISSING = "не найдено"
 
@@ -25,12 +36,6 @@ KINDS = {
     "academic_leave_application": "leave",
     "practice_certificate": "practice",
     "internship_certificate": "practice",
-}
-
-MONTHS = {
-    "января": 1, "февраля": 2, "марта": 3, "апреля": 4,
-    "мая": 5, "июня": 6, "июля": 7, "августа": 8,
-    "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12,
 }
 
 # Длинные метки раньше коротких: «дата начала практики» не равна «дата начала».
@@ -77,19 +82,6 @@ _LABELS = tuple(sorted({
 NAME = r"[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё]+){1,3}"
 GROUP = re.compile(r"(?<![А-Яа-яЁёA-Za-z0-9])([А-ЯЁ]{1,8}-\d{2}-\d)(?!\d)")
 NUMBER = re.compile(r"(ОБ|ПР|OB|PR|NP)\s*[-–—]\s*(\d+)", flags=re.IGNORECASE)
-REASONS = (
-    "по состоянию здоровья",
-    "по семейным обстоятельствам",
-    "по уходу за ребенком",
-    "по уходу за ребёнком",
-    "в связи с призывом",
-)
-GRADES = ("отлично", "хорошо", "удовлетворительно", "зачтено", "неудовлетворительно")
-FORMS = (
-    ("очно-заоч", "очно-заочная"),
-    ("заоч", "заочная"),
-    ("очн", "очная"),
-)
 
 
 def pick_fields(doc_type: str, ocr: dict, images: list) -> dict:
@@ -124,7 +116,7 @@ def _study(rows: list[str], blob: str, signed: bool, sealed: bool) -> dict:
         "study_form": _form(rows, blob) or MISSING,
         "study_start": start or MISSING,
         "study_end": end or MISSING,
-        "document_number": _document_number(rows) or MISSING,
+        "document_number": _document_number(rows, "study") or MISSING,
         "issue_date": _issue_date(rows) or MISSING,
         "signature_present": signed,
         "seal_present": sealed,
@@ -164,7 +156,7 @@ def _practice(rows: list[str], blob: str, signed: bool, sealed: bool) -> dict:
         "internship_end": end or MISSING,
         "supervisor_name": _person(rows, ("фио руководителя практики", "руководитель практики", "руководитель")) or MISSING,
         "grade": _grade(rows) or MISSING,
-        "document_number": _document_number(rows) or MISSING,
+        "document_number": _document_number(rows, "practice") or MISSING,
         "issue_date": _issue_date(rows) or MISSING,
         "signature_present": signed,
         "seal_present": sealed,
@@ -180,7 +172,16 @@ def _split_label(row: str) -> tuple[str, str] | None:
         if rest[:1] not in ("", " ", ":", "-", "–", "—", "."):
             continue
         return label, rest.lstrip(" \t:.-–—").strip()
-    return None
+    if ":" not in row:
+        return None
+    head, _, tail = row.partition(":")
+    # «Период: дата - дата» — это пара, а не опечатка в метке начала или конца.
+    if len(parse_dates(tail)) >= 2:
+        return None
+    fuzzy = closest_label(head, _LABELS)
+    if fuzzy is None:
+        return None
+    return fuzzy, tail.strip()
 
 
 def _labeled(rows: list[str], labels: tuple[str, ...], accept=None) -> str | None:
@@ -300,18 +301,10 @@ def _university(rows: list[str], blob: str) -> str | None:
 
 
 def _form(rows: list[str], blob: str) -> str | None:
-    labeled = _labeled(rows, ("форма обучения",), accept=_form_word)
+    labeled = _labeled(rows, ("форма обучения",), accept=lambda tail: closed_or_raw(tail, FORMS))
     if labeled:
         return labeled
-    return _form_word(blob)
-
-
-def _form_word(text: str) -> str | None:
-    low = text.lower()
-    for prefix, canonical in FORMS:
-        if prefix in low:
-            return canonical
-    return None
+    return snap(blob, FORMS)
 
 
 def _group(rows: list[str], blob: str) -> str | None:
@@ -343,45 +336,38 @@ def _course_in(text: str) -> str | None:
 
 
 def _reason(rows: list[str], blob: str) -> str | None:
-    labeled = _labeled(rows, ("причина отпуска", "причина"), accept=_reason_in)
+    labeled = _labeled(rows, ("причина отпуска", "причина"), accept=_reason_tail)
     if labeled:
         return labeled
-    return _reason_in(blob)
+    return snap(blob, REASONS)
 
 
-def _reason_in(text: str) -> str | None:
-    low = text.lower().replace("ё", "е")
-    for phrase in REASONS:
-        if phrase.replace("ё", "е") in low:
-            return phrase.replace("ё", "е")
-    return None
+def _reason_tail(text: str) -> str | None:
+    hit = snap(text, REASONS)
+    if hit:
+        return hit
+    cleaned = text.strip(" .")
+    if not cleaned or _split_label(cleaned) is not None:
+        return None
+    return cleaned
 
 
 def _grade(rows: list[str]) -> str | None:
-    def accept(tail: str) -> str | None:
-        low = tail.lower()
-        for grade in GRADES:
-            if grade in low:
-                return grade
-        return None
-
-    return _labeled(rows, ("оценка",), accept=accept)
+    return _labeled(rows, ("оценка",), accept=lambda tail: closed_or_raw(tail, GRADES))
 
 
-def _document_number(rows: list[str]) -> str | None:
+def _document_number(rows: list[str], kind: str) -> str | None:
     for row in rows:
         split = _split_label(row)
         on_number_line = split is not None and split[0] in {"номер справки", "номер документа", "номер"}
         if not on_number_line and not re.search(r"номер|№", row, flags=re.IGNORECASE):
             continue
-        found = NUMBER.search(row)
+        found = NUMBER.search(fix_digits(row))
         if not found:
             continue
-        prefix = found.group(1).upper()
-        prefix = {"OB": "ОБ", "PR": "ПР", "NP": "ПР"}.get(prefix, prefix)
-        if prefix not in {"ОБ", "ПР"}:
-            continue
-        return f"{prefix}-{found.group(2)}"
+        value = number_for(found.group(1), found.group(2), kind)
+        if value:
+            return value
     return None
 
 
@@ -414,9 +400,9 @@ def _span(
     start = _date_by_label(rows, start_labels)
     end = _date_by_label(rows, end_labels)
     if start and end:
-        return start, end
+        return ordered_span(start, end)
     pair_start, pair_end = _pair(rows, pair_hints)
-    return start or pair_start, end or pair_end
+    return ordered_span(start or pair_start, end or pair_end)
 
 
 def _date_by_label(rows: list[str], labels: tuple[str, ...]) -> str | None:
@@ -450,41 +436,4 @@ def _pair(rows: list[str], hints: tuple[str, ...]) -> tuple[str | None, str | No
 
 
 def _iso_dates(text: str) -> list[str]:
-    found = []
-    numeric = re.compile(r"\b(\d{1,2})[./](\d{1,2})[./](\d{4})(?:\s*г\.?)?")
-    iso = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
-    words = re.compile(
-        r"\b(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})",
-        flags=re.IGNORECASE,
-    )
-    for match in numeric.finditer(text):
-        day, month, year = (int(part) for part in match.groups())
-        value = _calendar(year, month, day)
-        if value:
-            found.append((match.start(), value))
-    for match in iso.finditer(text):
-        year, month, day = (int(part) for part in match.groups())
-        value = _calendar(year, month, day)
-        if value:
-            found.append((match.start(), value))
-    for match in words.finditer(text):
-        day = int(match.group(1))
-        month = MONTHS[match.group(2).lower()]
-        year = int(match.group(3))
-        value = _calendar(year, month, day)
-        if value:
-            found.append((match.start(), value))
-    found.sort(key=lambda item: item[0])
-    ordered = []
-    for _, value in found:
-        if value not in ordered:
-            ordered.append(value)
-    return ordered
-
-
-def _calendar(year: int, month: int, day: int) -> str | None:
-    try:
-        datetime.date(year, month, day)
-    except ValueError:
-        return None
-    return f"{year:04d}-{month:02d}-{day:02d}"
+    return parse_dates(text)

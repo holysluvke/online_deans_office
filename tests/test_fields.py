@@ -350,7 +350,7 @@ def test_number_must_match_prefix_and_fio_label_is_not_declined():
     issued = pick_fields("study_certificate", ocr(["Дата выдачи: 31.02.2026"]), [])
     assert issued["issue_date"] == MISSING
     form = pick_fields("study_certificate", ocr(["Форма обучения: вечерняя"]), [])
-    assert form["study_form"] == MISSING
+    assert form["study_form"] == "вечерняя"
     course = pick_fields("academic_leave_application", ocr(["Курс: 5"]), [])
     assert course["course"] == MISSING
     group = pick_fields("academic_leave_application", ocr(["Учебная группа: ПИ-21"]), [])
