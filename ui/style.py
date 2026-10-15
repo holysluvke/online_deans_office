@@ -41,6 +41,7 @@ ICONS = {
     "alert": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
     "circle_check": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
     "circle_alert": '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+    "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     "minus": '<path d="M5 12h14"/>',
     "upload": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
 }
@@ -308,6 +309,15 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .issue-ic {width: 28px; height: 28px; border-radius: var(--r-small); background: var(--warn-bg); color: var(--warn); display: grid; place-items: center; flex: none;}
 .issue b {display: block; font-size: .9rem; font-weight: 600; color: var(--text);}
 .issue span {font-size: .82rem; color: var(--text2);}
+.fields {margin: 4px 0 2px;}
+.frow {display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line);}
+.frow:last-child {border-bottom: 0;}
+.f-ic {width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none;}
+.f-ic.yes {background: var(--ok-bg); color: var(--ok);}
+.f-ic.no {background: var(--warn-bg); color: var(--warn);}
+.f-label {flex: 1; font-size: .82rem; color: var(--text2);}
+.f-val {font-size: .88rem; font-weight: 600; color: var(--text); text-align: right; overflow-wrap: anywhere;}
+.f-val.none {color: var(--warn); font-weight: 500;}
 .source {display: flex; align-items: center; gap: 10px; background: var(--field); border: 1px solid var(--line); padding: 12px 14px; margin-top: 16px; border-radius: var(--r-field);
          font-size: .82rem; color: var(--text2);}
 .source a {margin-left: auto; color: var(--text2); display: flex;}
@@ -325,7 +335,6 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 /* ---------- подвал ---------- */
 .footer {display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 28px; padding-top: 22px;
          font-size: .8rem; color: var(--muted);}
-.footer a {color: var(--text2) !important; text-decoration: none !important; display: inline-flex; gap: 6px; align-items: center;}
 
 /* ---------- плейсхолдер справа, пока ничего не отправлено ---------- */
 .empty {text-align: center; color: var(--muted); font-size: .85rem; padding: 36px 12px;}

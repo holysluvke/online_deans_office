@@ -12,6 +12,7 @@ ML-щикам этот файл менять не нужно: они работ�
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from backend.knowledge.dates import humanize_date
 from backend.pipeline import extract_fields, answer_question
 from backend.db import insert_job, get_job, update_job, get_unfinished_jobs
 from backend.log import log
@@ -54,7 +55,8 @@ def _run(job_id: str) -> None:
 
         # Шаг 1: OCR (функция из pipeline.py)
         fields = extract_fields(job["path"], job["doc_type"])
-        update_job(job_id, fields=fields, progress=60)
+        # на страницу уходят даты словами («1 сентября 2026»); answer_question получает исходные ISO-поля
+        update_job(job_id, fields={k: humanize_date(v) for k, v in fields.items()}, progress=60)
 
         # Шаг 2: ответ по Положению (функция из pipeline.py)
         step = "ответ (answer_question)"

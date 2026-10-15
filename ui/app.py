@@ -18,7 +18,6 @@ MAX_FILES = 10
 API = os.getenv("API_URL", "http://127.0.0.1:8000")
 
 # Ссылка на текст Положения для подвала и карточек результата (пока заглушка)
-POLICY_URL = "#"
 
 DOC_TYPES = {
     "Справка об обучении": "study_certificate",
@@ -191,6 +190,26 @@ def render_stepper(n_files: int, jobs: list) -> None:
     st.markdown(f'<div class="stepper">{"".join(parts)}</div>', unsafe_allow_html=True)
 
 
+# Поле документа -> подпись для списка «Распознанные поля»
+FIELD_LABELS = {
+    "student_name": "ФИО студента", "university": "Название вуза", "program": "Направление подготовки",
+    "study_form": "Форма обучения", "study_start": "Начало обучения", "study_end": "Окончание обучения",
+    "document_number": "Номер документа", "issue_date": "Дата выдачи", "group": "Учебная группа", "course": "Курс",
+    "leave_reason": "Причина отпуска", "leave_start": "Начало отпуска", "leave_end": "Окончание отпуска",
+    "application_date": "Дата заявления", "organization": "Организация", "internship_start": "Начало практики",
+    "internship_end": "Окончание практики", "supervisor_name": "Руководитель практики", "grade": "Оценка",
+    "signature_present": "Подпись", "seal_present": "Печать",
+}
+# Флаги подписи и печати: подпись зависит от типа документа
+FLAG_LABELS = {
+    ("signature_present", "study_certificate"): "Подпись сотрудника",
+    ("signature_present", "academic_leave_application"): "Подпись студента",
+    ("signature_present", "internship_certificate"): "Подпись руководителя",
+    ("seal_present", "study_certificate"): "Печать вуза",
+    ("seal_present", "internship_certificate"): "Печать организации",
+}
+
+
 def missing_issues(job: dict) -> list:
     """Чего не хватает на документе: берёт missing_fields из ответа бэкенда, запасной путь - пустые поля."""
     result = job.get("result") or {}
@@ -333,6 +352,23 @@ with col_left:
         st.rerun()  # полный перезапуск: кнопка отправки узнает, что отправленного больше нет
 
 
+def fields_view(job: dict) -> str:
+    """Распознанные поля списком: галочка - нашлось, крестик - нет (вместо сырого JSON)."""
+    rows = []
+    for key, value in (job.get("fields") or {}).items():
+        label = FLAG_LABELS.get((key, job.get("doc_type")), FIELD_LABELS.get(key, key))
+        if isinstance(value, bool):  # подпись / печать
+            found, shown = value, "Есть" if value else "Нет"
+        else:
+            found = value not in ("не найдено", None, "")
+            shown = str(value) if found else "не найдено"  # даты бэкенд уже прислал словами
+        rows.append(html_line(
+            '<div class="frow">', f'<span class="f-ic {"yes" if found else "no"}">', svg("check" if found else "x", 14), "</span>",
+            f'<span class="f-label">{html.escape(label)}</span>',
+            f'<span class="f-val{"" if found else " none"}">{html.escape(shown)}</span></div>'))
+    return '<div class="fields">' + "".join(rows) + "</div>" if rows else ""
+
+
 def result_view(job: dict) -> None:
     """Карточка результата одной готовой задачи: вердикт, что не найдено, основание и распознанные поля."""
     result = job["result"] or {}
@@ -347,11 +383,7 @@ def result_view(job: dict) -> None:
 
     if status == "missing" and kind == "missing_fields":
         title = "Документ требует исправлений"
-        text = message
-        if issues:
-            text = f"Не найдено обязательных реквизитов: {len(issues)}. Окончательное решение принимает сотрудник деканата."
-            if "не тот тип документа" in message:
-                text += " Возможно, выбран не тот тип документа."
+        text = ""  # что именно не хватает, видно в списке ниже
         icon_name = "alert"
     elif status == "missing":
         title = "Не найдено в документе"
@@ -359,7 +391,8 @@ def result_view(job: dict) -> None:
         icon_name = "alert"
     elif status == "ok" and kind == "document_ok":
         title = "Обязательные сведения на месте"
-        text = message or "Окончательное решение принимает сотрудник деканата."
+        # «по пунктам 4.1, 4.2 Положения» убираем: пункты показаны в строке «Основание» ниже
+        text = re.sub(r"\s+по пунктам\s+[\d.,\s]+Положения", "", message) or "Окончательное решение принимает сотрудник деканата."
         icon_name = "circle_check"
     elif status == "ok":
         title = "Ответ найден"
@@ -386,19 +419,20 @@ def result_view(job: dict) -> None:
     else:
         source_html = ""
 
+    text_html = f"<span>{html.escape(str(text))}</span>" if text else ""  # пустой текст - без второй строки
     with st.container(key=f"res_{job['job_id']}"):
         st.markdown(
             html_line(
                 '<div class="rhead"><span class="rname">', svg("file_image", 18), html.escape(job["filename"]),
                 '</span><span class="rtag">Ответ агента</span></div>',
                 f'<div class="verdict {status}">', svg(icon_name, 20),
-                f"<div><b>{title}</b><span>{html.escape(str(text))}</span></div></div>",
+                f"<div><b>{title}</b>{text_html}</div></div>",
                 issues_html, source_html,
             ),
             unsafe_allow_html=True,
         )
         with st.expander("Распознанные поля"):
-            st.json(job["fields"])
+            st.markdown(fields_view(job), unsafe_allow_html=True)
 
 
 def toggle(flag: str) -> None:
@@ -513,7 +547,6 @@ with col_right:
     live_view()
 
 st.markdown(
-    html_line('<div class="footer"><span>Онлайн-деканат · Сервис проверки документов</span>',
-              f'<a href="{POLICY_URL}" target="_blank" rel="noopener">Положение о документах ', svg("arrow_ur", 14), "</a></div>"),
+    html_line('<div class="footer"><span>Онлайн-деканат · Сервис проверки документов</span></div>'),
     unsafe_allow_html=True,
 )
