@@ -98,11 +98,18 @@ CSS = """
         --info: #1A1AE6; --info-bg: #E6E6FB; --err: #C23A3A; --err-bg: #FBE7E7;
         --glow: rgba(26, 26, 230, .08);
     }
+    /* в светлой теме берётся отдельная картинка (folder_light.webp) с прозрачной светлой задней стенкой и мягкая светлая тень */
+    .hero-art img {filter: drop-shadow(0 14px 26px rgba(90, 100, 130, .14)) !important;}
 }
 
 /* ---------- базовое ---------- */
 #MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stHeaderActionElements"] {display: none;}
+/* полоса под шапкой шире окна на ширину прокрутки: без этого внизу появлялась горизонтальная прокрутка */
+html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {overflow-x: hidden !important;}
+/* пока Streamlit перерисовывает страницу (например, после ввода вопроса), он на долю секунды тускнит старые блоки: это и выглядело как дёргание */
+[data-stale="true"], [data-stale="true"] * {opacity: 1 !important; transition: none !important;}
+[data-testid="stAppViewContainer"] * {scroll-behavior: auto !important;}
 /* фон: тонкая сетка и мягкое свечение сверху */
 [data-testid="stAppViewContainer"], .stApp {
     background:
@@ -195,6 +202,7 @@ CSS = """
 [data-testid="stTextInput"] > div > div, [data-testid="stSelectbox"] [data-baseweb="select"] > div {
     background: var(--card) !important; border: 1px solid var(--line-hi) !important; border-radius: 0 !important;}
 [data-testid="stSelectbox"] [data-baseweb="select"], [data-testid="stSelectbox"] [data-baseweb="select"] *, [data-testid="stTextInput"] [data-baseweb] {border-radius: 0 !important;}
+[data-testid="InputInstructions"] {display: none !important;}
 [data-testid="stTextInput"] input::placeholder {color: var(--muted);}
 
 /* ---------- зона загрузки ---------- */
@@ -226,6 +234,7 @@ CSS = """
 [data-testid="stFileChip"] small, [data-testid="stFileChip"] div div + div {color: var(--muted); font-size: .72rem;}
 [data-testid="stBaseButton-borderlessIcon"] {align-self: flex-start; background: transparent; color: var(--text2);}
 .upload-count {font-size: .75rem; color: var(--muted);}
+.upload-hint {min-height: 1.2em; line-height: 1.2;}
 .st-key-clear_files {width: 100%; display: flex; justify-content: flex-end;}
 .st-key-clear_files [data-testid="stButton"] {width: auto;}
 .st-key-clear_files button {padding: 0 !important; min-height: 0 !important;}
@@ -353,6 +362,24 @@ body.page-drop-active .page-drop {opacity: 1;}
 /* невидимый iframe со скриптом не должен занимать место в странице */
 [data-testid="stElementContainer"]:has(iframe[height="0"], [data-testid="stIFrame"]) {position: absolute; height: 0; margin: 0; overflow: hidden;}
 
+/* ---------- скругления: размеры меняются здесь ---------- */
+:root {--r-card: 18px; --r-field: 12px; --r-small: 8px;}
+.st-key-upload_card, .card, .st-key-queue_card, [class*="st-key-res_"], .st-key-next_card, .st-key-empty_card {
+    border-radius: var(--r-card) !important; background: var(--card) !important;}   /* уголки-скобки на скруглённых карточках не нужны */
+[data-testid="stTextInput"] > div > div, [data-testid="stSelectbox"] [data-baseweb="select"], [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stSelectbox"] [data-baseweb="select"] *, [data-testid="stTextInput"] [data-baseweb] {border-radius: var(--r-field) !important;}
+[data-testid="stFileUploaderDropzone"], [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"],
+.st-key-clear_hist [data-testid="stBaseButton-secondary"], .st-key-q_open_btn button, .st-key-r_open_btn button, .source, .cta {border-radius: var(--r-field) !important;}
+.st-key-help_btn [data-testid="stBaseButton-secondary"], .st-key-clear_files [data-testid="stBaseButton-secondary"] {border-radius: var(--r-small) !important;}
+[data-testid="stFileChip"] {border-radius: var(--r-field) !important;}
+[data-testid="stFileChip"] > div:first-child, .logo, .qicon, .issue-ic, .step-ic {border-radius: var(--r-small) !important;}
+.logo, .qicon {border-radius: var(--r-field) !important;}
+.count-pill, .pill {border-radius: 999px !important;}
+.verdict {border-radius: var(--r-field) !important;}
+.qbar, .qbar span {border-radius: 999px !important;}
+.page-drop {border-radius: var(--r-card) !important;}
+[class*="st-key-res_"] [data-testid="stExpander"] details {border-radius: var(--r-field) !important;}
+
 /* ---------- узкий экран ---------- */
 @media (max-width: 800px) {
     [data-testid="stMainBlockContainer"] {padding: 0 1rem 2rem !important;}
@@ -403,11 +430,29 @@ PAGE_DROP_JS = """
     input.dispatchEvent(new P.Event('change', {bubbles: true}));
   };
 
+  // Поле вопроса: Streamlit принимает текст только по Enter или при уходе из поля. Применяем сами через полсекунды
+  // после последней набранной буквы, чтобы Enter не был нужен (на телефоне это особенно неудобно).
+  let applyTimer = null;
+  const onInput = e => {
+    const el = e.target;
+    if (!el || el.tagName !== 'INPUT' || !el.closest('[data-testid="stTextInput"]')) return;
+    clearTimeout(applyTimer);
+    applyTimer = setTimeout(() => {
+      const opts = {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true};
+      el.dispatchEvent(new P.KeyboardEvent('keydown', opts));
+      el.dispatchEvent(new P.KeyboardEvent('keypress', opts));
+      el.dispatchEvent(new P.KeyboardEvent('keyup', opts));
+    }, 500);
+  };
+
   D.addEventListener('dragover', onOver, true);
   D.addEventListener('drop', onDrop, true);
+  D.addEventListener('input', onInput, true);
   P.__pageDrop = {off() {
     D.removeEventListener('dragover', onOver, true);
     D.removeEventListener('drop', onDrop, true);
+    D.removeEventListener('input', onInput, true);
+    clearTimeout(applyTimer);
     overlay.remove(); show(false);
   }};
 })();

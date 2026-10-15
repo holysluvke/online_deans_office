@@ -20,7 +20,6 @@ API = "http://127.0.0.1:8000"
 POLICY_URL = "#"
 
 # Вопрос по умолчанию: подставляется, если студент ничего не написал
-DEFAULT_QUESTION = "Содержит ли документ все обязательные сведения по Положению?"
 
 DOC_TYPES = {
     "Справка об обучении": "study_certificate",
@@ -134,13 +133,17 @@ st.markdown(
     html_line(
         '<div class="hero"><div class="hero-text"><h1 class="hero-title">Онлайн-<br>деканат.</h1>',
         '<p class="page-sub">Загрузите справки, дождитесь проверки и узнайте, что нужно исправить в каждом документе.</p></div>',
-        f'<div class="hero-art"><img src="{folder_img}" alt=""></div></div>' if folder_img else "</div>",
+        (f'<div class="hero-art"><picture><source media="(prefers-color-scheme: light)" srcset="{asset_uri("folder_light.webp") or folder_img}">'
+         f'<img src="{folder_img}" alt=""></picture></div></div>') if folder_img else "</div>",
     ),
     unsafe_allow_html=True,
 )
 
 # Место под шаги: заполняется ниже и обновляется вместе с очередью
 stepper_slot = st.empty()
+# Сразу показываем шаги в прежнем виде, пока скрипт добегает до расчёта новых: так на перезапуске страница не прыгает
+if st.session_state.get("stepper_html"):
+    stepper_slot.markdown(st.session_state["stepper_html"], unsafe_allow_html=True)
 
 
 def render_stepper(n_files: int, jobs: list) -> None:
@@ -180,7 +183,9 @@ def render_stepper(n_files: int, jobs: list) -> None:
         ))
         if i < len(steps) - 1:
             parts.append('<div class="step-line"></div>')
-    stepper_slot.markdown(f'<div class="stepper">{"".join(parts)}</div>', unsafe_allow_html=True)
+    stepper_html = f'<div class="stepper">{"".join(parts)}</div>'
+    st.session_state["stepper_html"] = stepper_html
+    stepper_slot.markdown(stepper_html, unsafe_allow_html=True)
 
 
 def missing_issues(job: dict) -> list:
@@ -209,7 +214,7 @@ with col_left:
             unsafe_allow_html=True,
         )
         doc_label = st.selectbox("Тип документа", list(DOC_TYPES))
-        st.markdown('<div class="field-label"><span>Ваш вопрос</span><span class="opt">Необязательно</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="field-label"><span>Ваш вопрос</span><span class="opt">Обязательно</span></div>', unsafe_allow_html=True)
         question = st.text_input("Ваш вопрос", label_visibility="collapsed", placeholder="Например: достаточно ли справки для перевода?")
         # Смена ключа сбрасывает загрузчик: так работает «Удалить все»
         uploader_n = st.session_state.setdefault("uploader_n", 0)
@@ -220,6 +225,10 @@ with col_left:
             key=f"uploader_{uploader_n}",
         )
         st.session_state["n_files"] = len(files)
+        # Шаги рисуем и в основном скрипте, а не только в обновляемом куске: иначе при каждом перезапуске
+        # (ввод вопроса, выбор файла) они на миг пропадают, и вся страница ниже прыгает вверх и вниз
+        if history is not None:
+            render_stepper(len(files), history)
 
         if files:
             count_col, clear_col = st.columns([1, 1], vertical_alignment="center")
@@ -234,7 +243,7 @@ with col_left:
         if too_many:
             st.warning(f"За один раз можно отправить не больше {MAX_FILES} файлов, сейчас выбрано {len(files)}.")
 
-        effective_question = question.strip() or DEFAULT_QUESTION
+        effective_question = question.strip()  # вопрос обязателен: без него отправка недоступна
 
         def fingerprint(f) -> str:
             """Отпечаток отправки (содержимое файла + тип документа + вопрос): одинаковый отпечаток значит, что это та же отправка."""
@@ -275,7 +284,7 @@ with col_left:
 
         # Делим выбранные файлы на новые и уже отправленные с этим же вопросом и типом документа.
         # Одинаковые файлы внутри одного выбора считаем одним.
-        by_fp = {fingerprint(f): f for f in files}
+        by_fp = {fingerprint(f): f for f in files} if effective_question else {}
         sent_fps = already_sent() if by_fp else set()
         new_files = {fp: f for fp, f in by_fp.items() if fp not in sent_fps}
         sent_files = {fp: f for fp, f in by_fp.items() if fp in sent_fps}
@@ -284,6 +293,10 @@ with col_left:
         # «Отправить повторно» появляется под ней, если файл уже отправлен с этим вопросом.
         send_clicked = st.button("Отправить на проверку", icon=":material/arrow_forward:", disabled=not new_files or too_many, key="send_btn")
         resend_clicked = st.button("Отправить повторно", icon=":material/refresh:", key="resend_btn") if sent_files else False
+
+        # Строка занимает место всегда (текст в ней то есть, то нет), иначе всё, что ниже, прыгает при вводе вопроса
+        hint = "Введите вопрос, чтобы отправить документы на проверку." if files and not effective_question else "&nbsp;"
+        st.markdown(f'<div class="upload-count upload-hint">{hint}</div>', unsafe_allow_html=True)
 
         if send_clicked:
             if new_files:  # на случай двойного клика: новое могло уже уйти в предыдущем запуске
