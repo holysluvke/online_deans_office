@@ -33,6 +33,9 @@ extract_fields возвращает плоский словарь {строка:
                                  signature_present, seal_present
     Даты — ISO (2026-09-01), курс — строка, не число.
     Ненайденное поле — "не найдено". Печать и подпись — True/False.
+
+Прогрев (backend/warmup.py): при старте сервера в фоне вызывается warmup() ниже: он заранее
+загружает Paddle (и TrOCR, если включён USE_HANDWRITING=1), чтобы первый документ не ждал загрузки.
 """
 
 from backend.knowledge import (
@@ -59,7 +62,7 @@ def answer_question(fields: dict, doc_type: str, question: str) -> dict:
     """RAG: по полям документа и вопросу вернуть ответ со ссылкой на пункт Положения."""
     if is_transfer_question(question):
         return transfer_answer(fields, doc_type).to_dict()
-    
+
     intent = ROUTER.route(question).intent
     if intent == "completeness":
         return check_completeness(fields, doc_type).to_dict()
@@ -67,3 +70,13 @@ def answer_question(fields: dict, doc_type: str, question: str) -> dict:
         return who_decides().to_dict()
 
     return field_lookup(fields, doc_type, question).to_dict()
+
+
+def warmup() -> None:
+    """Загружает модели в память заранее (при старте сервера и командой python -m backend.warmup)."""
+    from backend.ocr.engine import get_engine
+    from backend.ocr import handwriting
+
+    get_engine()  # Paddle
+    if handwriting.enabled():  # TrOCR только если включён USE_HANDWRITING=1
+        handwriting.get_reader()

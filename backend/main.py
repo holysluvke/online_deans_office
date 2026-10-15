@@ -12,7 +12,7 @@
 Документация со всеми адресами и кнопкой «Try it out»: http://127.0.0.1:8000/docs
 
 Адреса:
-    GET  /health                 проверка, что сервер жив
+    GET  /health                 проверка, что сервер жив; ready=false, пока грузятся модели (см. warmup.py)
     POST /documents              принять фото или PDF + тип документа + вопрос + session_id, поставить в очередь
                                  (файл до MAX_UPLOAD_MB, настоящая картинка или PDF, не больше MAX_ACTIVE_JOBS задач в работе;
                                  PDF сразу превращается в картинку, см. pdf.py)
@@ -40,6 +40,7 @@ from backend.jobs import create_job, restore_queue
 from backend.cleanup import cleanup_once, cleanup_loop
 from backend.pdf import pdf_to_png, PdfError
 from backend.log import log
+from backend import warmup
 
 from fastapi import FastAPI, File, Form, Query, Request, UploadFile, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -55,7 +56,8 @@ restore_queue()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Пока сервер работает, в фоне крутится автоудаление старых задач и фото."""
+    """Пока сервер работает, в фоне крутится автоудаление старых задач и фото. При старте в фоне грузятся модели."""
+    warmup.start()
     task = asyncio.create_task(cleanup_loop())
     yield
     task.cancel()
@@ -158,8 +160,8 @@ def check_image(content: bytes) -> str:
 
 @app.get("/health")
 def health():
-    """Проверка, что сервер запущен."""
-    return {"status": "ok"}
+    """Проверка, что сервер запущен. ready=false, пока в фоне грузятся модели (первый документ подождёт)."""
+    return {"status": "ok", **warmup.status()}
 
 
 @app.post("/documents")

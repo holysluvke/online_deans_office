@@ -1,3 +1,7 @@
+[browser]
+# Не отправлять статистику в сеть: страница должна работать без интернета
+gatherUsageStats = false
+
 [server]
 # Лимит на размер загружаемого фото в МБ. Держите равным MAX_UPLOAD_MB на бэкенде (backend/main.py)
 maxUploadSize = 10
@@ -9,15 +13,15 @@ showWidgetBorder = true
 
 # Светлая и тёмная темы. Streamlit сам выбирает по настройке системы.
 [theme.light]
-primaryColor = "#1A1AE6"
-backgroundColor = "#F4F4F2"
+primaryColor = "#4F53D8"
+backgroundColor = "#F4F5FA"
 secondaryBackgroundColor = "#FFFFFF"
-textColor = "#111111"
-borderColor = "#E3E3DE"
+textColor = "#141826"
+borderColor = "#DCE0EC"
 
 [theme.dark]
-primaryColor = "#8C97FF"
-backgroundColor = "#0B0C10"
-secondaryBackgroundColor = "#14161C"
-textColor = "#F2F2F0"
-borderColor = "#262A33"
+primaryColor = "#808BFA"
+backgroundColor = "#0D111B"
+secondaryBackgroundColor = "#151B28"
+textColor = "#F1F3FA"
+borderColor = "#2A3345"
