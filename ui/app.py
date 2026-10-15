@@ -119,19 +119,24 @@ sent_fps = already_sent() if by_fp else set()
 new_files = {fp: f for fp, f in by_fp.items() if fp not in sent_fps}
 sent_files = {fp: f for fp, f in by_fp.items() if fp in sent_fps}
 
-# Кнопка активна только если есть что отправлять: повторное нажатие ничего не дублирует
-if st.button("Отправить на проверку", type="primary", disabled=not new_files or too_many):
+# Кнопка активна только если есть что отправлять: повторное нажатие ничего не дублирует.
+# «Отправить повторно?» стоит справа от неё и появляется, только если файл уже отправлен с этим вопросом.
+col_send, col_resend = st.columns(2)
+with col_send:
+    send_clicked = st.button("Отправить на проверку", type="primary", disabled=not new_files or too_many)
+with col_resend:
+    resend_clicked = st.button("Отправить повторно?") if sent_files else False
+
+if send_clicked:
     if new_files:  # на случай двойного клика: новое могло уже уйти в предыдущем запуске
         send_files(new_files)
+    st.rerun()
+if resend_clicked:
+    send_files(sent_files)
     st.rerun()
 
 for message in st.session_state.pop("send_errors", []):
     st.error(message)
-
-if sent_files:
-    if st.button("Отправить повторно?"):
-        send_files(sent_files)
-        st.rerun()
 
 # ---------- Блоки «Очередь проверки» и «Результаты» ----------
 # Появляются по шагам: очередь, когда у посетителя есть хотя бы одна задача, результаты, когда

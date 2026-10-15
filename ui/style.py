@@ -15,11 +15,9 @@
     .job, .job-top, .name, .pill, .bar   карточка задачи в очереди
     .job.queued/.processing/.done/.error цвет плашки статуса (через переменную --c)
     .result, .tag, .src                  карточка ответа
-    .tagline                             строка над заголовком
 """
-import time
-
 import streamlit as st
+import streamlit.components.v1 as components
 
 CSS = """
 <style>
@@ -89,8 +87,9 @@ CSS = """
 h1 {font-size: 2.6rem !important; font-weight: 300 !important; line-height: 1.15 !important;
     letter-spacing: -0.02em;}
 h2, h3 {font-weight: 400 !important; letter-spacing: -0.01em;}
-.tagline {color: var(--blue); font-size: .75rem; font-weight: 500;
-          letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px;}
+/* заголовок страницы прижат к верху: убираем большой верхний отступ Streamlit */
+[data-testid="stMainBlockContainer"] {padding-top: 2rem !important;}
+h1 {padding-top: 0 !important;}
 
 /* ---------- карточка задачи в очереди (app.py, функция queue_view) ---------- */
 .job {border: 1px solid var(--line); background: var(--card); border-radius: 16px;
@@ -167,59 +166,104 @@ h2, h3 {font-weight: 400 !important; letter-spacing: -0.01em;}
 [data-testid="stExpander"] details {
     background: var(--card); border: 1px solid var(--line); border-radius: 16px;
 }
-/* ---------- заставка при первом входе (функция intro_html ниже) ----------
-   Название на весь экран, затем оно уменьшается и уезжает на место заголовка страницы.
-   Конечные left/top совпадают с положением текста настоящего h1 (колонка 704px по центру, 171px от верха).
-   Фон держится почти до конца пути, чтобы настоящий заголовок не просвечивал рядом с едущим. */
-.intro {position: fixed; inset: 0; z-index: 1000000; pointer-events: none;
-        animation: intro-hide 3.2s linear both;}
-.intro-bg {position: absolute; inset: 0; background: var(--bg);
-           animation: intro-bg 3.2s ease-in-out both;}
-.intro-title {position: absolute; color: var(--text); white-space: nowrap; font-weight: 300;
-              letter-spacing: -0.02em; line-height: 1.15;
-              animation: intro-title 3.2s cubic-bezier(.65,0,.25,1) both;}
-@keyframes intro-title {
-    0%   {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(2.8rem, 10vw, 7.5rem); opacity: 0;}
-    20%  {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(2.8rem, 10vw, 7.5rem); opacity: 1;}
-    45%  {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: clamp(2.8rem, 10vw, 7.5rem); opacity: 1;}
-    90%  {left: max(16px, calc((100vw - 704px) / 2)); top: 171px; transform: translate(0, 0); font-size: 2.6rem; opacity: 1;}
-    99%  {left: max(16px, calc((100vw - 704px) / 2)); top: 171px; transform: translate(0, 0); font-size: 2.6rem; opacity: 1;}
-    100% {left: max(16px, calc((100vw - 704px) / 2)); top: 171px; transform: translate(0, 0); font-size: 2.6rem; opacity: 0;}
-}
-@keyframes intro-bg {0%, 82% {opacity: 1;} 98%, 100% {opacity: 0;}}
-@keyframes intro-hide {0%, 99% {visibility: visible;} 100% {visibility: hidden;}}
-@media (max-width: 600px) {
-    @keyframes intro-title {
-        0%   {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 2.8rem; opacity: 0;}
-        20%, 45% {left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 2.8rem; opacity: 1;}
-        90%, 99% {left: 16px; top: 190px; transform: translate(0, 0); font-size: 2.6rem; opacity: 1;}
-        100% {left: 16px; top: 190px; transform: translate(0, 0); font-size: 2.6rem; opacity: 0;}
-    }
-}
-@media (prefers-reduced-motion: reduce) {.intro {display: none;}}
+[data-testid="stElementContainer"]:has([data-testid="stButton"]) {margin-top: .2rem;}
+/* колонки по ширине содержимого и рядом (в них стоят кнопки отправки) */
+[data-testid="stHorizontalBlock"] {gap: .8rem; flex-wrap: wrap;}
+[data-testid="stColumn"] [data-testid="stBaseButton-secondary"], [data-testid="column"] [data-testid="stBaseButton-secondary"] {margin-top: 0;}
+[data-testid="stColumn"], [data-testid="column"] {flex: 0 0 auto !important; width: auto !important; min-width: 0 !important;}
+
+/* ---------- русские надписи в зоне загрузки ----------
+   Streamlit пишет их по-английски и не даёт поменять, поэтому прячем оригинал (font-size: 0)
+   и рисуем свой текст через ::after. Если поменяете лимит файла, поправьте «10 МБ» (MAX_UPLOAD_MB в backend/main.py). */
+[data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p {font-size: 0 !important;}
+[data-testid="stFileUploaderDropzone"] button [data-testid="stMarkdownContainer"] p::after {
+    content: "Выбрать файлы"; font-size: 1rem;}
+[data-testid="stFileUploaderDropzoneInstructions"] span {font-size: 0 !important;}
+[data-testid="stFileUploaderDropzoneInstructions"] span::after {
+    content: "До 10 МБ на файл · JPG, PNG, WEBP, PDF"; font-size: .875rem;}
+
+/* ---------- перетаскивание файлов на всю страницу (скрипт PAGE_DROP_JS ниже) ----------
+   Пока над окном тащат файл, страница размывается и появляется рамка; бросить можно в любое место. */
+[data-testid="stMainBlockContainer"] {transition: filter .2s ease;}
+body.page-drop-active [data-testid="stMainBlockContainer"] {filter: blur(8px) brightness(.75);}
+.page-drop {position: fixed; inset: 14px; z-index: 1000000; pointer-events: none; opacity: 0;
+            border: 2px dashed var(--blue); border-radius: 28px; transition: opacity .2s ease;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+            background: color-mix(in srgb, var(--blue) 10%, transparent);}
+body.page-drop-active .page-drop {opacity: 1;}
+.page-drop b {font-size: 1.8rem; font-weight: 400; color: var(--text);}
+.page-drop span {font-size: .95rem; color: var(--muted);}
+/* невидимый iframe со скриптом не должен занимать место в странице */
+[data-testid="stElementContainer"]:has(iframe[height="0"]) {position: absolute; height: 0; margin: 0; overflow: hidden;}
+
+/* ===== ВРЕМЕННО: выравнивание по центру (чтобы откатить, удалите всё до метки КОНЕЦ) ===== */
+.stApp h1, .stApp h2, .stApp h3, [data-testid="stCaptionContainer"],
+.result {text-align: center;}
+[data-testid="stElementContainer"]:has([data-testid="stButton"]) {align-self: center;}
+[data-testid="stHorizontalBlock"] {justify-content: center;}
+[data-testid="stButton"] {display: flex; justify-content: center; width: auto;}
+[data-testid="stAlertContainer"] {justify-content: center; text-align: center;}
+[data-testid="stSelectbox"] input {text-align: center;}
+[data-testid="stTextInput"] input {text-align: center;}
+/* ===== КОНЕЦ временного блока ===== */
 </style>
 """
 
 
-# Сколько секунд после первого захода показывать заставку (чуть больше длительности анимации в CSS)
-INTRO_SECONDS = 3.6
+# Скрипт запускается в невидимом iframe, но вешает слушатели на саму страницу (iframe того же origin).
+# Брошенные файлы кладём в настоящее поле загрузки Streamlit и сообщаем ему об изменении.
+PAGE_DROP_JS = """
+<script>
+(function () {
+  const P = window.parent, D = P.document;
+  if (P.__pageDrop) P.__pageDrop.off();           // после перезапуска скрипта не плодим слушателей
 
+  const overlay = D.createElement('div');
+  overlay.className = 'page-drop';
+  overlay.innerHTML = '<b>Отпустите файлы в любом месте</b><span>Фото или PDF документа</span>';
+  D.body.appendChild(overlay);
 
-def intro_html() -> str:
-    """Разметка заставки, пока идёт первый заход посетителя; потом пустая строка (место в странице остаётся тем же)."""
-    started = st.session_state.setdefault("intro_started", time.time())
-    if time.time() - started > INTRO_SECONDS:
-        return "<span></span>"
-    # Повторный перезапуск скрипта внутри этого окна не перезапускает анимацию: тот же элемент остаётся на месте
-    return '<div class="intro"><div class="intro-bg"></div><div class="intro-title">Онлайн-деканат</div></div>'
+  let timer = null;
+  const show = on => D.body.classList.toggle('page-drop-active', on);
+  const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+
+  // dragover приходит непрерывно, пока файл над окном; если события замолчали, значит файл увели
+  const onOver = e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    show(true);
+    clearTimeout(timer);
+    timer = setTimeout(() => show(false), 250);
+  };
+  const onDrop = e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();                           // чтобы встроенная зона Streamlit не добавила файлы второй раз
+    clearTimeout(timer);
+    show(false);
+    const input = D.querySelector('[data-testid="stFileUploaderDropzoneInput"]');
+    if (!input || !e.dataTransfer.files.length) return;
+    const dt = new P.DataTransfer();
+    Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+    input.files = dt.files;
+    input.dispatchEvent(new P.Event('change', {bubbles: true}));
+  };
+
+  D.addEventListener('dragover', onOver, true);
+  D.addEventListener('drop', onDrop, true);
+  P.__pageDrop = {off() {
+    D.removeEventListener('dragover', onOver, true);
+    D.removeEventListener('drop', onDrop, true);
+    overlay.remove(); show(false);
+  }};
+})();
+</script>
+"""
 
 
 def render_header() -> None:
-    """Подключает стили, показывает заставку при первом входе и рисует шапку страницы."""
+    """Подключает стили и рисует шапку страницы."""
     st.markdown(CSS, unsafe_allow_html=True)
-    st.markdown(intro_html(), unsafe_allow_html=True)
-    st.markdown(
-        '<div class="tagline">Цифровой секретарь · OCR → поля → Положение</div>',
-        unsafe_allow_html=True,
-    )
     st.title("Онлайн-деканат")
+    components.html(PAGE_DROP_JS, height=0)  # перетаскивание файлов на всю страницу

@@ -48,7 +48,7 @@ def answer_question(fields: dict, doc_type: str, question: str) -> dict:
     #тестовая заглушка
     time.sleep(1)
     return {
-        "status": "missing",  # ok / missing / no_answer
+        "status": "no_answer",  # ok / missing / no_answer
         "message": "Не хватает даты выдачи и печати вуза. Эти поля обязательны по п. 3.4 Положения.",
         "sources": ["п. 3.4"],
     }
