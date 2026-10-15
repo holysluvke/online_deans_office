@@ -52,16 +52,26 @@ def _full_document(doc_type: str) -> Answer:
 
 
 def _incomplete_document(doc_type: str, missing_keys: list[str], missing_clauses: set[str]) -> Answer:
-    missing_labels = ", ".join(label_for(k, doc_type).lower() for k in missing_keys)
+    missing_labels = ", ".join(label_for(k, doc_type) for k in missing_keys)
     missing_sorted = sort_rules(missing_clauses)
     return Answer(
         status="missing",
         message=(
             f"Не хватает следующих сведений: {missing_labels}. "
             f"Основание: пункты {', '.join(missing_sorted)} Положения."
+            f"{_type_mismatch_hint(doc_type, missing_keys)}"
         ),
         sources=as_source(missing_sorted),
         answerable=True,
         value="missing_fields",
         missing_fields=missing_keys,
     )
+
+
+def _type_mismatch_hint(doc_type: str, missing_keys: list[str]) -> str:
+    """Если пропущена больше половины текстовых полей — вероятно, выбран не тот тип."""
+    text_fields = TEXT_FIELDS[doc_type]
+    missing_text = [k for k in missing_keys if k in text_fields]
+    if len(missing_text) > len(text_fields) / 2:
+        return " Возможно, выбран не тот тип документа."
+    return ""
