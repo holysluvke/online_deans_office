@@ -193,5 +193,83 @@ class TestNoConfidentMatch(unittest.TestCase):
         self.assertEqual(r.status, "no_answer")
 
 
+class TestMessageFormatting(unittest.TestCase):
+    """Issue: дата — по-человечески в message, ISO в value."""
+
+    def test_date_humanized_in_message(self):
+        f = _study_fields(issue_date="2026-09-01")
+        r = field_lookup(f, "study_certificate", "Укажи значение поля «Дата выдачи».")
+        self.assertIn("1 сентября 2026", r.message)
+        self.assertEqual(r.value, "2026-09-01")  # value остался ISO
+
+    def test_non_date_not_changed(self):
+        r = field_lookup(_study_fields(), "study_certificate", "Укажи значение поля «ФИО студента».")
+        self.assertIn("Иванов Иван Иванович", r.message)
+        self.assertNotIn("2026", r.message)
+
+
+class TestTypeMismatchHint(unittest.TestCase):
+    """Issue: если пропущена больше половины полей — hint про тип документа."""
+
+    def test_majority_missing(self):
+        from backend.knowledge import check_completeness
+        # 5 из 8 полей отсутствуют — больше половины
+        f = _study_fields(
+            student_name="не найдено", university="не найдено",
+            program="не найдено", study_form="не найдено",
+            issue_date="не найдено",
+        )
+        r = check_completeness(f, "study_certificate")
+        self.assertIn("Возможно, выбран не тот тип документа", r.message)
+
+    def test_half_missing_no_hint(self):
+        from backend.knowledge import check_completeness
+        # 4 из 8 — ровно половина, порог не превышен
+        f = _study_fields(
+            student_name="не найдено", university="не найдено",
+            program="не найдено", study_form="не найдено",
+        )
+        r = check_completeness(f, "study_certificate")
+        self.assertNotIn("Возможно, выбран не тот тип документа", r.message)
+
+
+class TestFioKeepsCase(unittest.TestCase):
+    """Issue: убрать .lower() — «ФИО» не превращается в «фио»."""
+
+    def test_fio_uppercase_in_message(self):
+        from backend.knowledge import check_completeness
+        f = _study_fields(student_name="не найдено")
+        r = check_completeness(f, "study_certificate")
+        self.assertIn("ФИО", r.message)
+        self.assertNotIn("фио студента", r.message)
+
+
+class TestTransferQuestion(unittest.TestCase):
+    """Issue: «Хватит ли справки для перевода?» → п. 3.5, answerable: false."""
+
+    def test_detector(self):
+        from backend.knowledge.transfer import is_transfer_question
+        self.assertTrue(is_transfer_question("Хватит ли справки для перевода на 2 курс?"))
+        self.assertTrue(is_transfer_question("Можно ли перевестись?"))
+        self.assertTrue(is_transfer_question("Есть ли академические задолженности?"))
+        self.assertFalse(is_transfer_question("Содержит ли документ все обязательные сведения?"))
+
+    def test_transfer_answer_shape(self):
+        from backend.knowledge.transfer import transfer_answer
+        r = transfer_answer(_study_fields(), "study_certificate")
+        self.assertEqual(r.status, "no_answer")
+        self.assertFalse(r.answerable)
+        self.assertIsNone(r.value)
+        self.assertEqual(r.sources, [])
+        self.assertIn("3.5", r.message)
+
+    def test_transfer_message_contains_completeness(self):
+        """В message — и п. 3.5, и результат проверки комплектности."""
+        from backend.knowledge.transfer import transfer_answer
+        r = transfer_answer(_study_fields(), "study_certificate")
+        # Документ полный — в message будет «содержит все обязательные сведения»
+        self.assertIn("все обязательные сведения", r.message)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from .answers import Answer, no_answer
+from .dates import humanize_date
 from .labels import LABEL_TO_FIELD, label_for
 from .rules import MISSING, TEXT_FIELDS
 
@@ -239,7 +240,7 @@ def _found_field(field: str, doc_type: str, value: str) -> Answer:
     label = label_for(field, doc_type)
     return Answer(
         status="ok",
-        message=f"{label}: {value}.",
+        message=f"{label}: {humanize_date(value)}.",
         sources=[f"field:{field}"],
         answerable=True,
         value=value,

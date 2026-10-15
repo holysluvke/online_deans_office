@@ -57,6 +57,7 @@ from backend.knowledge import (
     field_lookup,
     who_decides,
 )
+from backend.knowledge.transfer import is_transfer_question, transfer_answer
 
 # Триггеры для классификации типа вопроса. Порядок проверок в _classify — по этому кортежу.
 # Узкие фразы идут первыми, чтобы Q3 не перехватывал Q1 или Q2.
@@ -88,6 +89,9 @@ def _classify(question: str) -> str:
 
 def answer_question(fields: dict, doc_type: str, question: str) -> dict:
     """RAG: по полям документа и вопросу вернуть ответ со ссылкой на пункт Положения."""
+    if is_transfer_question(question):
+        return transfer_answer(fields, doc_type).to_dict()
+    
     q = question.lower().strip()
 
     # Q3: кто принимает окончательное решение
