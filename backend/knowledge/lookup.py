@@ -23,6 +23,7 @@ from .answers import Answer, no_answer
 from .dates import humanize_date
 from .labels import LABEL_TO_FIELD, label_for
 from .rules import MISSING, TEXT_FIELDS
+from .text import normalize as _normalize
 
 # Нормализация вопроса
 
@@ -39,15 +40,6 @@ _STOPWORDS = frozenset({
     "и", "в", "на", "у", "с", "по",
     "мне", "нам", "пожалуйста", "скажи", "подскажи",
 })
-
-_PUNCT = re.compile(r"[.,;:!?]+")
-_SPACES = re.compile(r"\s+")
-
-def _normalize(text: str) -> str:
-    """Нормализация без удаления слов: регистр, ё→е, пунктуация, пробелы."""
-    text = text.lower().replace("ё", "е")
-    text = _PUNCT.sub(" ", text)
-    return _SPACES.sub(" ", text).strip()
 
 
 def _clean(text: str) -> str:

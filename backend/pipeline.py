@@ -57,6 +57,7 @@ from backend.knowledge import (
     field_lookup,
     who_decides,
 )
+from backend.knowledge.router import ROUTER
 from backend.knowledge.transfer import is_transfer_question, transfer_answer
 
 # Триггеры для классификации типа вопроса. Порядок проверок в _classify — по этому кортежу.
@@ -92,15 +93,10 @@ def answer_question(fields: dict, doc_type: str, question: str) -> dict:
     if is_transfer_question(question):
         return transfer_answer(fields, doc_type).to_dict()
     
-    q = question.lower().strip()
-
-    # Q3: кто принимает окончательное решение
-    if "кто принимает окончательное решение" in q:
+    intent = ROUTER.route(question).intent
+    if intent == "completeness":
+        return check_completeness(fields, doc_type).to_dict()
+    if intent == "who_decides":
         return who_decides().to_dict()
 
-    # Q1: содержит ли документ все обязательные сведения
-    if "содержит ли документ все обязательные" in q or "все обязательные сведения" in q:
-        return check_completeness(fields, doc_type).to_dict()
-
-    # Q2 + fallback: field_lookup сам вернёт no_answer, если поле не распознано
     return field_lookup(fields, doc_type, question).to_dict()
