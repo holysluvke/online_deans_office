@@ -191,16 +191,18 @@ def render_stepper(n_files: int, jobs: list) -> None:
 
 
 def missing_issues(job: dict) -> list:
-    """Что не найдено на документе: по распознанным полям (не найдено, False, пусто) подбирает сообщения."""
+    """Чего не хватает на документе: берёт missing_fields из ответа бэкенда, запасной путь - пустые поля."""
     result = job.get("result") or {}
-    if result.get("status") != "missing":
+    if result.get("value") != "missing_fields":  # только ответ про комплектность, не про одно поле
         return []
+    keys = result.get("missing_fields") or [
+        k for k, v in (job.get("fields") or {}).items() if v in ("не найдено", False, None, "")
+    ]
     issues = []
-    for key, value in (job.get("fields") or {}).items():
-        if value in ("не найдено", False, None, ""):
-            title, hint = MISSING_TEXT.get(key, (f"Не найдено: {key}", "Это поле обязательно по Положению."))
-            if (title, hint) not in issues:  # stamp и seal_present дают одно и то же сообщение
-                issues.append((title, hint))
+    for key in keys:
+        title, hint = MISSING_TEXT.get(key, (f"Не найдено: {key}", "Это поле обязательно по Положению."))
+        if (title, hint) not in issues:  # stamp и seal_present дают одно и то же сообщение
+            issues.append((title, hint))
     return issues
 
 
@@ -335,21 +337,36 @@ def result_view(job: dict) -> None:
     result = job["result"] or {}
     status = result.get("status") if result.get("status") in ("ok", "missing", "no_answer") else "no_answer"
     issues = missing_issues(job)
-    sources = [str(s).removeprefix("rule:") for s in (result.get("sources") or [])]
-    source_text = ", ".join(s if s.startswith("п.") else f"п. {s}" for s in sources)
+    message = str(result.get("message") or "")
+    kind = result.get("value")  # "document_ok" / "missing_fields" / значение поля / None
+    raw_sources = [str(s) for s in (result.get("sources") or [])]
+    clauses = [s.removeprefix("rule:") for s in raw_sources if not s.startswith("field:")]  # пункты Положения
+    source_text = ", ".join(c if c.startswith("п.") else f"п. {c}" for c in clauses)
+    from_document = any(s.startswith("field:") for s in raw_sources)  # ответ взят из полей документа
 
-    if status == "missing":
+    if status == "missing" and kind == "missing_fields":
         title = "Документ требует исправлений"
-        text = ("Проверка завершена: отсутствуют обязательные реквизиты. Окончательное решение принимает сотрудник деканата."
-                if issues else result.get("message", ""))
+        text = message
+        if issues:
+            text = f"Не найдено обязательных реквизитов: {len(issues)}. Окончательное решение принимает сотрудник деканата."
+            if "не тот тип документа" in message:
+                text += " Возможно, выбран не тот тип документа."
         icon_name = "alert"
-    elif status == "ok":
+    elif status == "missing":
+        title = "Не найдено в документе"
+        text = message
+        icon_name = "alert"
+    elif status == "ok" and kind == "document_ok":
         title = "Обязательные сведения на месте"
-        text = result.get("message") or "Окончательное решение принимает сотрудник деканата."
+        text = message or "Окончательное решение принимает сотрудник деканата."
+        icon_name = "circle_check"
+    elif status == "ok":
+        title = "Ответ найден"
+        text = message
         icon_name = "circle_check"
     else:
         title = "Ответа нет"
-        text = result.get("message", "")
+        text = message
         icon_name = "circle_alert"
 
     issues_html = "".join(
@@ -357,8 +374,13 @@ def result_view(job: dict) -> None:
                   f"<b>{html.escape(t)}</b><span>{html.escape(h)}</span></div></div>")
         for t, h in issues
     )
-    if source_text:
-        phrase = f"Эти реквизиты обязательны по {source_text} Положения." if issues else f"Основание: {source_text} Положения."
+    if source_text or from_document:
+        if not source_text:
+            phrase = "Основание: данные, распознанные на документе."
+        elif issues:
+            phrase = f"Эти реквизиты обязательны по {source_text} Положения."
+        else:
+            phrase = f"Основание: {source_text} Положения."
         source_html = html_line('<div class="source">', svg("book", 16), f"<span>{html.escape(phrase)}</span></div>")
     else:
         source_html = ""
