@@ -361,7 +361,7 @@ def fields_view(job: dict) -> str:
             found, shown = value, "Есть" if value else "Нет"
         else:
             found = value not in ("не найдено", None, "")
-            shown = re.sub(r"^(\d{4})-(\d{2})-(\d{2})$", r"\3.\2.\1", str(value)) if found else "не найдено"  # 2026-09-01 -> 01.09.2026
+            shown = str(value) if found else "не найдено"  # даты бэкенд уже прислал словами
         rows.append(html_line(
             '<div class="frow">', f'<span class="f-ic {"yes" if found else "no"}">', svg("check" if found else "x", 14), "</span>",
             f'<span class="f-label">{html.escape(label)}</span>',
