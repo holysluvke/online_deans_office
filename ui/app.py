@@ -346,13 +346,7 @@ def result_view(job: dict) -> None:
 
     if status == "missing" and kind == "missing_fields":
         title = "Документ требует исправлений"
-        text = message
-        if issues:
-            # «Не хватает следующих сведений: дата выдачи, печать вуза.» без предложения про пункты (оно в строке «Основание»)
-            head = message.split(" Основание:")[0].strip() or "Не хватает: " + ", ".join(t.removeprefix("Не хватает ") for t, _ in issues) + "."
-            text = f"{head} Окончательное решение принимает сотрудник деканата."
-            if "не тот тип документа" in message:
-                text += " Возможно, выбран не тот тип документа."
+        text = ""  # что именно не хватает, видно в списке ниже
         icon_name = "alert"
     elif status == "missing":
         title = "Не найдено в документе"
@@ -387,13 +381,14 @@ def result_view(job: dict) -> None:
     else:
         source_html = ""
 
+    text_html = f"<span>{html.escape(str(text))}</span>" if text else ""  # пустой текст - без второй строки
     with st.container(key=f"res_{job['job_id']}"):
         st.markdown(
             html_line(
                 '<div class="rhead"><span class="rname">', svg("file_image", 18), html.escape(job["filename"]),
                 '</span><span class="rtag">Ответ агента</span></div>',
                 f'<div class="verdict {status}">', svg(icon_name, 20),
-                f"<div><b>{title}</b><span>{html.escape(str(text))}</span></div></div>",
+                f"<div><b>{title}</b>{text_html}</div></div>",
                 issues_html, source_html,
             ),
             unsafe_allow_html=True,
