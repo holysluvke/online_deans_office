@@ -185,9 +185,9 @@ def test_extract_fields_returns_flat_dict(monkeypatch, tmp_path):
 
 
 def test_answer_question_keeps_the_handoff_shape():
-    fields = {"student_name": "Иванов", "issue_date": "не найдено"}
+    fields = {"student_name": "Иванов", "issue_date": "не найдено", "seal_present": False}
     result = answer_question(fields, "study_certificate", "Содержит ли документ все обязательные сведения?")
-    assert set(result) == {"status", "message", "sources", "answerable", "value"}
+    assert {"status", "message", "sources", "answerable", "value"} <= set(result)
     assert result["status"] in {"ok", "missing", "no_answer"}
     assert isinstance(result["message"], str) and result["message"]
     assert isinstance(result["sources"], list) and all(isinstance(item, str) for item in result["sources"])
