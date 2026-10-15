@@ -78,6 +78,7 @@ CSS = """
     --err: #FF8E8E;  --err-bg: rgba(255, 123, 123, .12);
     --bar: var(--accent-text);
     --glow: rgba(70, 90, 190, .16);   /* свечение сверху справа */
+    --tint: rgba(255, 255, 255, .06); /* лёгкая заливка цветом текста (вместо color-mix: старый Safari его не знает) */
     --r-card: 18px; --r-field: 12px; --r-small: 8px;   /* скругления */
     --font-body: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;   /* запас: системный */
     --font-head: 'Unbounded', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
@@ -93,6 +94,7 @@ CSS = """
         --ok: #15805A; --ok-bg: #E3F5EC; --warn: #9A6410; --warn-bg: #FBF1DC;
         --info: #1A1AE6; --info-bg: #E6E6FB; --err: #C23A3A; --err-bg: #FBE7E7;
         --glow: rgba(26, 26, 230, .08);
+        --tint: rgba(17, 17, 17, .06);
     }
     /* для светлой темы своя картинка папки (folder_light.webp) и мягкая тень */
     .hero-art img {filter: drop-shadow(0 14px 26px rgba(90, 100, 130, .14)) !important;}
@@ -118,6 +120,9 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .stApp button, .stApp [data-testid="stMarkdownContainer"],
 .stApp span:not([data-testid="stIconMaterial"]) {font-family: var(--font-body) !important;}
 .stApp {color: var(--text);}
+/* macOS по умолчанию рисует светлый текст на тёмном фоне жирнее и размытее, чем Windows: включаем тонкое сглаживание */
+html, body, .stApp {-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+                    -webkit-text-size-adjust: 100%; text-size-adjust: 100%;}
 [data-testid="stVerticalBlock"] {gap: 1rem;}
 .stApp svg {flex: none;}
 .card-title, .sec-title, .next-t, .page-drop b, .step-ic, .step-t, .brand-tag, .count-pill {font-family: var(--font-head) !important;}
@@ -151,7 +156,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .step-ic {width: 28px; height: 28px; border: 1px solid var(--line-hi); border-radius: var(--r-small); display: grid; place-items: center; flex: none;
           font-size: .62rem; font-weight: 500; color: var(--muted); background: transparent;}
 .step.done .step-ic {color: var(--text2);}
-.step.current .step-ic {border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent);}
+.step.current .step-ic {border-color: var(--text); color: var(--text); background: var(--tint);}
 .step.pending .step-ic {opacity: .7;}
 .step-t {font-size: .85rem; font-weight: 600; color: var(--text); line-height: 1.3;}
 .step-s {font-size: .72rem; color: var(--muted); line-height: 1.3;}
@@ -200,7 +205,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 [data-testid="stFileUploaderDropzoneInstructions"] > div {display: none;}
 [data-testid="stFileUploaderDropzoneInstructions"] {
     display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; position: relative;
-    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='%23BEBFC1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='17 8 12 3 7 8'/><line x1='12' x2='12' y1='3' y2='15'/></svg>") top center / 26px no-repeat;}
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='%23BEBFC1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' x2='12' y1='3' y2='15'/%3E%3C/svg%3E") top center / 26px no-repeat;}
 [data-testid="stFileUploaderDropzoneInstructions"]::before {content: "Перетащите файлы сюда"; color: var(--text); font-size: .85rem; font-weight: 500;}
 [data-testid="stFileUploaderDropzoneInstructions"]::after {content: "или выберите на устройстве"; color: var(--text); font-size: .8rem; font-weight: 500;
     text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line-hi);}
@@ -229,7 +234,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 [data-testid="stBaseButton-secondary"] {
     background: transparent; border: 1px solid var(--line-hi); color: var(--text) !important; border-radius: var(--r-field);
     min-height: 44px; font-weight: 500; width: 100%; box-shadow: none;}
-[data-testid="stBaseButton-secondary"]:hover {border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent);}
+[data-testid="stBaseButton-secondary"]:hover {border-color: var(--text); background: var(--tint);}
 [data-testid="stBaseButton-secondary"] p {color: var(--text) !important; font-size: .85rem !important;}
 /* главная кнопка отправки: залитая; неактивная: пунктир и приглушённый текст, чтобы было видно, что она временно недоступна */
 .st-key-send_btn [data-testid="stBaseButton-secondary"] {background: var(--btn); border-color: var(--btn); color: var(--btn-text) !important;}
@@ -257,9 +262,22 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .st-key-qlist_closed1 {max-height: 84px; overflow-y: auto; scroll-snap-type: y mandatory;}
 .st-key-qlist_closed2 {max-height: 168px; overflow-y: auto; scroll-snap-type: y mandatory;}
 .st-key-qlist_closed2 [data-testid="stElementContainer"] ~ [data-testid="stElementContainer"] .qrow {border-top: 1px solid var(--line);}
-.st-key-rlist_closed {max-height: 470px; overflow-y: auto; scroll-snap-type: y mandatory; padding-right: 2px;}
+.st-key-rlist_closed {max-height: 470px; overflow-y: auto; scroll-snap-type: y proximity; padding-right: 2px;}
 .st-key-qlist_closed1 [data-testid="stElementContainer"], .st-key-qlist_closed2 [data-testid="stElementContainer"], .st-key-rlist_closed > [data-testid="stVerticalBlock"] > * {scroll-snap-align: start;}
-.st-key-qlist_closed1, .st-key-qlist_closed2, .st-key-rlist_closed {scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;}
+/* Полоса прокрутки списков. На macOS системная полоса прячется, пока список не крутят, и не видно, что там есть ещё пункты;
+   Safari к тому же не понимает scrollbar-width/scrollbar-color. Поэтому рисуем свою через ::-webkit-scrollbar
+   (Chrome, Edge, Safari: так она видна всегда), а scrollbar-width оставляем только Firefox: если Chrome видит
+   scrollbar-width, он игнорирует ::-webkit-scrollbar. */
+.st-key-qlist_closed1::-webkit-scrollbar, .st-key-qlist_closed2::-webkit-scrollbar, .st-key-rlist_closed::-webkit-scrollbar {width: 6px;}
+.st-key-qlist_closed1::-webkit-scrollbar-track, .st-key-qlist_closed2::-webkit-scrollbar-track, .st-key-rlist_closed::-webkit-scrollbar-track {background: transparent;}
+.st-key-qlist_closed1::-webkit-scrollbar-thumb, .st-key-qlist_closed2::-webkit-scrollbar-thumb, .st-key-rlist_closed::-webkit-scrollbar-thumb {
+    background: var(--line-hi); border-radius: 999px;}
+@supports not selector(::-webkit-scrollbar) {
+    .st-key-qlist_closed1, .st-key-qlist_closed2, .st-key-rlist_closed {scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;}
+}
+/* Результат бывает выше списка, а Safari с жёсткой привязкой (mandatory) не даёт докрутить до его середины:
+   у результатов привязка мягкая (proximity). Инерция трекпада не должна прокручивать всю страницу. */
+.st-key-qlist_closed1, .st-key-qlist_closed2, .st-key-rlist_closed {-webkit-overflow-scrolling: touch; overscroll-behavior: contain;}
 .st-key-rlist_open [data-testid="stVerticalBlock"], .st-key-rlist_closed [data-testid="stVerticalBlock"] {gap: 1rem;}
 /* кнопка «Показать все» / «Свернуть»: спокойная, на всю ширину блока */
 .st-key-q_open_btn, .st-key-r_open_btn {margin-top: 10px;}
@@ -348,7 +366,7 @@ body.page-drop-active [data-testid="stMainBlockContainer"] {filter: blur(8px) br
 .page-drop {position: fixed; inset: 14px; z-index: 1000000; pointer-events: none; opacity: 0;
             border: 1px dashed var(--text); border-radius: var(--r-card); transition: opacity .2s ease;
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-            background: color-mix(in srgb, var(--text) 6%, transparent);}
+            background: var(--tint);}
 body.page-drop-active .page-drop {opacity: 1;}
 .page-drop b {font-size: 1.6rem; font-weight: 600; color: var(--text);}
 .page-drop span {font-size: .95rem; color: var(--muted);}
