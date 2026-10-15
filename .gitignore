@@ -223,5 +223,7 @@ __marimo__/
 # Marimo
 data/
 .DS_Store
-.vscode/settings.json
-results_mine.json
+
+
+results_*.json
+*.meta.json

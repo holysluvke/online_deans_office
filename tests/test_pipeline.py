@@ -1,79 +1,40 @@
-"""Интеграционный тест: матчинг + evaluate.py на эталонных данных."""
+"""
+Уровень A (issue #2 и #1): эталонные поля -> answer_question -> evaluate.py даёт 1.0.
+Заменяет старый скрипт test_pipeline.py из корня: тот надо удалить.
+"""
 import json
 from pathlib import Path
 
 import pytest
 
-from backend.knowledge import check_completeness
 from backend.pipeline import answer_question
+from tools import run_batch
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[1]
+REFERENCE = next((p for p in (ROOT / "data/open/reference_results.json", ROOT / "reference_results.json") if p.is_file()), None)
 
-
-def _load_json(name: str) -> dict:
-    path = PROJECT_ROOT / name
-    if not path.is_file():
-        pytest.skip(f"Нет файла организаторов: {name}")
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+pytestmark = pytest.mark.skipif(REFERENCE is None, reason="нет reference_results.json")
 
 
-def _build_results(reference: dict, questions: list[dict]) -> dict:
-    """Собирает results.json из эталона — без записи на диск."""
-    questions_by_doc: dict[str, list[dict]] = {}
-    for q in questions:
-        questions_by_doc.setdefault(q["document_id"], []).append(q)
-
-    documents = [
-        _document_result(doc, questions_by_doc[doc["document_id"]])
-        for doc in reference["documents"]
-    ]
-    return {"version": "1.0", "documents": documents}
-
-
-def _document_result(doc: dict, questions: list[dict]) -> dict:
-    fields = doc["fields"]
-    doc_type = doc["document_type"]
-    validation = check_completeness(fields, doc_type)
-
-    return {
-        "document_id":   doc["document_id"],
-        "document_type": doc_type,
-        "fields":        fields,
-        "validation": {
-            "status":         validation.value,
-            "missing_fields": validation.missing_fields,
-            "sources":        validation.sources,
-        },
-        "answers": [_answer_result(fields, doc_type, q) for q in questions],
-    }
-
-
-def _answer_result(fields: dict, doc_type: str, question: dict) -> dict:
-    r = answer_question(fields, doc_type, question["question"])
-    return {
-        "question_id": question["question_id"],
-        "answerable":  r["answerable"],
-        "value":       r["value"],
-        "answer":      r["message"],
-        "sources":     r["sources"],
-    }
-
-
-# Тест
-
-def test_evaluate_returns_perfect_scores_on_reference():
-    """Полный прогон: answer_question на эталоне → evaluate.py → 1.0 по трём метрикам."""
-    from evaluate import evaluate   # evaluate.py лежит в корне
-
-    reference = _load_json("reference_results.json")
-    questions = _load_json("questions.json")
-
-    predictions = _build_results(reference, questions)
-    report = evaluate(reference, predictions)
-
+def test_gold_level_a_is_perfect():
+    results, _, ref = run_batch.run("gold", reference=str(REFERENCE), quiet=True)
+    assert run_batch.check_format(results) == []
+    report = run_batch.load_evaluate().evaluate(ref, results)
     assert report["format_valid"] is True
-    assert report["errors"] == []
+    assert report["documents"] == 30 and report["questions"] == 120
     assert report["field_accuracy_macro"] == 1.0
     assert report["validation_exact_match"] == 1.0
     assert report["question_exact_match"] == 1.0
+    assert report["errors"] == []
+
+
+def test_answer_question_contract_has_six_keys():
+    fields = {"student_name": "Иванов", "issue_date": "не найдено"}
+    result = answer_question(fields, "study_certificate", "Содержит ли документ все обязательные сведения?")
+    assert set(result) == {"status", "message", "sources", "answerable", "value", "missing_fields"}
+    assert result["status"] in {"ok", "missing", "no_answer"}
+    assert isinstance(result["message"], str) and result["message"]
+    assert all(isinstance(s, str) for s in result["sources"])
+    assert isinstance(result["answerable"], bool)
+    assert isinstance(result["missing_fields"], list)
+    json.dumps(result, ensure_ascii=False)  # jobs.py кладёт ответ в SQLite как JSON
