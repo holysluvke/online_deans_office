@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1.7
+# Бэкенд + ML (PaddleOCR; TrOCR по желанию). Модели скачиваются ПРИ СБОРКЕ,
+# поэтому при запуске контейнера ничего не качается и старт быстрый.
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    HOME=/home/app \
+    PADDLE_PDX_CACHE_HOME=/opt/paddlex \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
+    HF_HOME=/opt/hf
+
+# Системные библиотеки для opencv и paddle
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -u 1000 app \
+    && mkdir -p /opt/paddlex /opt/hf /app/data \
+    && chown -R app:app /opt/paddlex /opt/hf /app
+
+WORKDIR /app
+
+# 1) Зависимости (слой меняется только при правке requirements)
+COPY requirements.backend.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.backend.txt
+
+# Рукописный TrOCR: тяжёлый (torch), по умолчанию не ставим. Включение: WITH_HANDWRITING=1
+ARG WITH_HANDWRITING=1
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "$WITH_HANDWRITING" = "1" ]; then \
+        pip install torch --index-url https://download.pytorch.org/whl/cpu \
+        && pip install transformers; \
+    fi
+
+# Падаем на сборке, а не в рантайме, если чего-то не хватает
+RUN python -c "import cv2, numpy, PIL, pypdfium2, rapidfuzz, fastapi, paddleocr"
+
+USER app
+
+# 2) Модели запекаем в образ. Настройки держите в синхроне с SETTINGS в backend/ocr/engine.py
+#    (если они разойдутся, недостающая модель просто докачается при первом запуске).
+RUN python - <<'EOF'
+from paddleocr import PaddleOCR
+PaddleOCR(
+    text_detection_model_name="PP-OCRv5_mobile_det",
+    text_recognition_model_name="eslav_PP-OCRv5_mobile_rec",
+    use_doc_orientation_classify=True,
+    use_doc_unwarping=False,
+    use_textline_orientation=False,
+    device="cpu",
+)
+print("Paddle: модели скачаны")
+EOF
+
+RUN if [ "$WITH_HANDWRITING" = "1" ]; then \
+        python -c "from transformers import TrOCRProcessor as P, VisionEncoderDecoderModel as M; m='kazars24/trocr-base-handwritten-ru'; P.from_pretrained(m); M.from_pretrained(m)"; \
+    fi
+
+# 3) Код (меняется чаще всего, поэтому последним)
+COPY --chown=app:app backend ./backend
+
+EXPOSE 8000
+
+# Один процесс: очередь задач живёт в памяти процесса, а база SQLite однопользовательская.
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

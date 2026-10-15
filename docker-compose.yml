@@ -1,0 +1,80 @@
+name: online-deans-office
+
+x-ui-build: &ui-build
+  context: .
+  dockerfile: Dockerfile.ui
+
+services:
+  # ---------- Бэкенд + ML (PaddleOCR) + SQLite в томе ----------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      args:
+        WITH_HANDWRITING: ${WITH_HANDWRITING:-1}
+    image: deans-backend:latest
+    init: true
+    restart: unless-stopped
+    environment:
+      OFFLINE: "1"                                   # модели уже в образе, в сеть не ходим
+      USE_HANDWRITING: ${WITH_HANDWRITING:-1}        # 1 только если образ собран с WITH_HANDWRITING=1
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      MAX_ACTIVE_JOBS: ${MAX_ACTIVE_JOBS:-10}
+      MAX_PDF_PAGES: ${MAX_PDF_PAGES:-3}
+      JOB_TTL_MINUTES: ${JOB_TTL_MINUTES:-60}
+      CLEANUP_EVERY_MINUTES: ${CLEANUP_EVERY_MINUTES:-5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - deans_data:/app/data                         # app.db, uploads, logs
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"           # только для отладки (/health, /docs), наружу не торчит
+    healthcheck:
+      # Здоров только когда модели загружены (ready=true). Пока нет, UI не стартует.
+      test: ["CMD", "python", "-c", "import json,sys,urllib.request as u; sys.exit(0 if json.load(u.urlopen('http://127.0.0.1:8000/health', timeout=3)).get('ready') else 1)"]
+      interval: 3s
+      timeout: 5s
+      retries: 80
+      start_period: 30s
+
+  # ---------- Страница ----------
+  ui:
+    build: *ui-build
+    image: deans-ui:latest
+    init: true
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy                   # UI не раньше сервера
+    environment:
+      API_URL: http://backend:8000
+      STREAMLIT_SERVER_MAX_UPLOAD_SIZE: ${MAX_UPLOAD_MB:-10}   # держим в синхроне с бэкендом
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request as u; sys.exit(0 if u.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3).status == 200 else 1)"]
+      interval: 2s
+      timeout: 4s
+      retries: 30
+      start_period: 5s
+
+  # ---------- Печатает адрес после того, как всё готово (для обычного `docker compose up`) ----------
+  announce:
+    build: *ui-build
+    image: deans-ui:latest
+    restart: "no"
+    depends_on:
+      ui:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        echo ""
+        echo "=============================================="
+        echo "  Онлайн-деканат готов. Открывайте:"
+        echo "    http://localhost:${UI_PORT:-8501}"
+        echo "  С другого устройства: http://<IP-этого-компьютера>:${UI_PORT:-8501}"
+        echo "=============================================="
+
+volumes:
+  deans_data:

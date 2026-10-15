@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+pillow
+pypdfium2
+rapidfuzz
+numpy
+pytest
+
+# OCR. paddlepaddle 3.3.0 на CPU ломает модели PaddleOCR, поэтому 3.2.2
+paddlepaddle==3.2.2
+paddleocr>=3.7,<3.8
+torch
+transformers
