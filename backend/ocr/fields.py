@@ -83,6 +83,22 @@ NAME = r"[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё]+){1,3}"
 GROUP = re.compile(r"(?<![А-Яа-яЁёA-Za-z0-9])([А-ЯЁ]{1,8}-\d{2}-\d)(?!\d)")
 NUMBER = re.compile(r"(ОБ|ПР|OB|PR|NP)\s*[-–—]\s*(\d+)", flags=re.IGNORECASE)
 
+# OCR читает «Курс» как «Kypc»: те же по виду латинские буквы вместо кириллицы.
+_LATIN_AS_CYRILLIC = str.maketrans({
+    "A": "А", "a": "а",
+    "B": "В",
+    "C": "С", "c": "с",
+    "E": "Е", "e": "е",
+    "H": "Н",
+    "K": "К", "k": "к",
+    "M": "М",
+    "O": "О", "o": "о",
+    "P": "Р", "p": "р",
+    "T": "Т",
+    "X": "Х", "x": "х",
+    "Y": "У", "y": "у",
+})
+
 
 def pick_fields(doc_type: str, ocr: dict, images: list) -> dict:
     kind = KINDS.get(doc_type)
@@ -163,22 +179,28 @@ def _practice(rows: list[str], blob: str, signed: bool, sealed: bool) -> dict:
     }
 
 
+def _fold_label(text: str) -> str:
+    """Латинские двойники в метке. Хвост строки при этом не переписываем."""
+    return text.translate(_LATIN_AS_CYRILLIC)
+
+
 def _split_label(row: str) -> tuple[str, str] | None:
-    low = row.lower().strip()
+    raw = row.strip()
+    low = _fold_label(raw).lower()
     for label in _LABELS:
         if not low.startswith(label):
             continue
-        rest = row.strip()[len(label):]
+        rest = raw[len(label):]
         if rest[:1] not in ("", " ", ":", "-", "–", "—", "."):
             continue
         return label, rest.lstrip(" \t:.-–—").strip()
-    if ":" not in row:
+    if ":" not in raw:
         return None
-    head, _, tail = row.partition(":")
+    head, _, tail = raw.partition(":")
     # «Период: дата - дата» — это пара, а не опечатка в метке начала или конца.
     if len(parse_dates(tail)) >= 2:
         return None
-    fuzzy = closest_label(head, _LABELS)
+    fuzzy = closest_label(_fold_label(head), _LABELS)
     if fuzzy is None:
         return None
     return fuzzy, tail.strip()
@@ -324,7 +346,7 @@ def _course(rows: list[str], blob: str) -> str | None:
     if labeled:
         return labeled
     for row in blob.split("\n"):
-        found = re.search(r"(?<!\d)([1-4])[ \t]*курс", row, flags=re.IGNORECASE)
+        found = re.search(r"(?<!\d)([1-4])[ \t]*курс", _fold_label(row), flags=re.IGNORECASE)
         if found:
             return found.group(1)
     return None

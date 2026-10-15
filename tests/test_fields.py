@@ -356,6 +356,8 @@ def test_number_must_match_prefix_and_fio_label_is_not_declined():
     assert form["study_form"] == "вечерняя"
     course = pick_fields("academic_leave_application", ocr(["Курс: 5"]), [])
     assert course["course"] == MISSING
+    lookalike = pick_fields("academic_leave_application", ocr(["Kypc: 3"]), [])
+    assert lookalike["course"] == "3"
     group = pick_fields("academic_leave_application", ocr(["Учебная группа: ПИ-21"]), [])
     assert group["group"] == MISSING
 
