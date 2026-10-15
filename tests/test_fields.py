@@ -114,6 +114,7 @@ def test_stamp_and_signature_are_bools():
     draw = ImageDraw.Draw(image)
     draw.rectangle((40, 40, 300, 80), fill="black")
     draw.ellipse((250, 80, 340, 170), fill=(180, 20, 20))
+    draw.line((120, 448, 340, 448), fill="black", width=2)
     draw.line((140, 400, 210, 445), fill="black", width=3)
     draw.line((210, 445, 155, 478), fill="black", width=3)
     pages = [{
@@ -355,6 +356,8 @@ def test_number_must_match_prefix_and_fio_label_is_not_declined():
     assert form["study_form"] == "вечерняя"
     course = pick_fields("academic_leave_application", ocr(["Курс: 5"]), [])
     assert course["course"] == MISSING
+    lookalike = pick_fields("academic_leave_application", ocr(["Kypc: 3"]), [])
+    assert lookalike["course"] == "3"
     group = pick_fields("academic_leave_application", ocr(["Учебная группа: ПИ-21"]), [])
     assert group["group"] == MISSING
 
@@ -426,12 +429,25 @@ def test_signature_phrases_cover_the_whole_line_and_a_bit_below():
     for phrase in phrases:
         image = Image.new("RGB", (1000, 320), "white")
         draw = ImageDraw.Draw(image)
+        draw.line((260, 168, 980, 168), fill=(150, 150, 150), width=2)
         draw.line((860, 168, 960, 142), fill=(30, 70, 160), width=3)
         draw.line((920, 142, 860, 188), fill=(30, 70, 160), width=3)
         pages = [{"lines": [{"text": phrase, "bbox": [30, 80, 210, 20]}]}]
         assert detect_marks([image], pages, "study_certificate")[0] is True, phrase
 
+    no_line = Image.new("RGB", (1000, 320), "white")
+    draw = ImageDraw.Draw(no_line)
+    draw.line((860, 168, 960, 142), fill=(30, 70, 160), width=3)
+    draw.line((920, 142, 860, 188), fill=(30, 70, 160), width=3)
+    pages = [{"lines": [{"text": "Подпись сотрудника:", "bbox": [30, 80, 210, 20]}]}]
+    assert detect_marks([no_line], pages, "study_certificate")[0] is False
+
     bare = Image.new("RGB", (1000, 320), "white")
-    ImageDraw.Draw(bare).line((40, 170, 960, 170), fill="black", width=2)
-    pages = [{"lines": [{"text": "Подпись", "bbox": [30, 80, 210, 20]}]}]
+    draw = ImageDraw.Draw(bare)
+    draw.line((250, 140, 900, 140), fill=(70, 70, 70), width=8)
+    draw.ellipse((760, 40, 960, 240), outline=(25, 70, 170), width=8)
+    pages = [{"lines": [
+        {"text": "Подпись сотрудника:", "bbox": [30, 110, 200, 22]},
+        {"text": "М.П.", "bbox": [820, 250, 40, 16]},
+    ]}]
     assert detect_marks([bare], pages, "study_certificate")[0] is False
