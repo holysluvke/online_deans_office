@@ -19,8 +19,6 @@ API = "http://127.0.0.1:8000"
 # Ссылка на текст Положения для подвала и карточек результата (пока заглушка)
 POLICY_URL = "#"
 
-# Вопрос по умолчанию: подставляется, если студент ничего не написал
-
 DOC_TYPES = {
     "Справка об обучении": "study_certificate",
     "Заявление на академический отпуск": "academic_leave_application",
@@ -35,7 +33,7 @@ STATUS_PILL = {
     "error": "Ошибка",
 }
 
-# Название поля для сообщений «не хватает ...»: (что не хватает, подсказка, что делать)
+# Поле документа -> (заголовок, подсказка) для сообщения «чего не хватает»
 MISSING_TEXT = {
     "issue_date": ("Не хватает даты выдачи", "На справке должна быть указана дата выдачи документа."),
     "application_date": ("Не хватает даты заявления", "На заявлении должна быть указана дата подачи."),
@@ -79,6 +77,14 @@ def fetch_jobs() -> list | None:
         return None
 
 
+def fetch_health() -> dict:
+    """Состояние бэкенда из /health (ready, state); пустой словарь, если сервер недоступен или старый и не знает про прогрев."""
+    try:
+        return requests.get(f"{API}/health", timeout=3).json()
+    except (requests.RequestException, ValueError):
+        return {}
+
+
 def plural(n: int, one: str, few: str, many: str) -> str:
     """Склоняет слово по числу: 1 документ, 2 документа, 5 документов."""
     if 10 < n % 100 < 15:
@@ -110,7 +116,7 @@ if not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", session_id):  # тот же фор�
 def how_it_works() -> None:
     """Окно с короткой инструкцией."""
     st.markdown(
-        "1. **Загрузите** фото или PDF справки либо заявления и напишите вопрос (он необязателен).\n"
+        "1. **Загрузите** фото или PDF справки либо заявления и напишите вопрос.\n"
         "2. **Дождитесь** проверки: документы обрабатываются по очереди.\n"
         "3. **Посмотрите** результат: что найдено, чего не хватает и на какой пункт Положения это опирается.\n\n"
         "Сервис ничего не принимает и не отклоняет: окончательное решение принимает сотрудник деканата."
@@ -120,14 +126,15 @@ def how_it_works() -> None:
 with st.container(key="topbar"):
     bar_left, bar_right = st.columns([4, 1], vertical_alignment="center")
     bar_left.markdown(
-        '<div class="topbar"><div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/></svg></div>'
-        '<span class="brand-tag">Проверка документов</span></div>',
+        html_line('<div class="topbar"><div class="logo">', svg("file_check", 20), "</div>",
+                  '<span class="brand-tag">Проверка документов</span></div>'),
         unsafe_allow_html=True,
     )
     with bar_right:
         if st.button("Как это работает", icon=":material/help:", key="help_btn"):
             how_it_works()
 
+# Картинка справа: для светлой темы своя версия (folder_light.webp)
 folder_img = asset_uri("folder.webp")
 st.markdown(
     html_line(
@@ -139,11 +146,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Место под шаги: заполняется ниже и обновляется вместе с очередью
-stepper_slot = st.empty()
-# Сразу показываем шаги в прежнем виде, пока скрипт добегает до расчёта новых: так на перезапуске страница не прыгает
-if st.session_state.get("stepper_html"):
-    stepper_slot.markdown(st.session_state["stepper_html"], unsafe_allow_html=True)
+# ---------- Шаги: свой блок, обновляется раз в 2 секунды независимо от остальной страницы ----------
+stepper_box = st.container()
 
 
 def render_stepper(n_files: int, jobs: list) -> None:
@@ -173,19 +177,17 @@ def render_stepper(n_files: int, jobs: list) -> None:
     else:
         s3 = ("current", f"Проверено · {len(done)} {plural(len(done), 'документ', 'документа', 'документов')}", True)
 
-    steps = [("Загрузка документов", s1, "upload"), ("Очередь проверки", s2, "list"), ("Результаты", s3, "clipboard")]
+    steps = [("Загрузка документов", s1), ("Очередь проверки", s2), ("Результаты", s3)]
     parts = []
-    for i, (title, (state, sub, hl), icon_name) in enumerate(steps):
-        icon_html = svg("check", 14) if state == "done" else f"{i + 1:02d}"
+    for i, (title, (state, sub, hl)) in enumerate(steps):
+        icon_html = svg("check", 14) if state == "done" else f"{i + 1:02d}"  # галочка у пройденных, номер у остальных
         parts.append(html_line(
             f'<div class="step {state}"><div class="step-ic">{icon_html}</div><div>',
             f'<div class="step-t">{title}</div><div class="step-s {"hl" if hl else ""}">{html.escape(sub)}</div></div></div>',
         ))
         if i < len(steps) - 1:
             parts.append('<div class="step-line"></div>')
-    stepper_html = f'<div class="stepper">{"".join(parts)}</div>'
-    st.session_state["stepper_html"] = stepper_html
-    stepper_slot.markdown(stepper_html, unsafe_allow_html=True)
+    st.markdown(f'<div class="stepper">{"".join(parts)}</div>', unsafe_allow_html=True)
 
 
 def missing_issues(job: dict) -> list:
@@ -204,7 +206,19 @@ def missing_issues(job: dict) -> list:
 
 # ---------- Основная часть: слева загрузка, справа очередь и результаты ----------
 col_left, col_right = st.columns([1, 1.9], gap="large")
-history = fetch_jobs()  # есть ли что очищать (кнопка «Очистить историю» неактивна, пока истории нет)
+
+
+@st.fragment(run_every=2)
+def stepper_view() -> None:
+    """Шаги: число файлов берёт из загрузчика (его состояние известно до отрисовки), остальное у бэкенда."""
+    n_files = len(st.session_state.get(f"uploader_{st.session_state.get('uploader_n', 0)}") or [])
+    render_stepper(n_files, fetch_jobs() or [])
+
+
+with stepper_box:
+    stepper_view()
+
+history = fetch_jobs()  # нужна кнопке «Очистить историю»: она неактивна, пока истории нет
 
 with col_left:
     with st.container(key="upload_card"):
@@ -215,7 +229,7 @@ with col_left:
         )
         doc_label = st.selectbox("Тип документа", list(DOC_TYPES))
         st.markdown('<div class="field-label"><span>Ваш вопрос</span><span class="opt">Обязательно</span></div>', unsafe_allow_html=True)
-        question = st.text_input("Ваш вопрос", label_visibility="collapsed", placeholder="Например: достаточно ли справки для перевода?")
+        question = st.text_input("Ваш вопрос", label_visibility="collapsed", placeholder="Например: достаточно ли справки для перевода?").strip()
         # Смена ключа сбрасывает загрузчик: так работает «Удалить все»
         uploader_n = st.session_state.setdefault("uploader_n", 0)
         files = st.file_uploader(
@@ -224,11 +238,6 @@ with col_left:
             accept_multiple_files=True,
             key=f"uploader_{uploader_n}",
         )
-        st.session_state["n_files"] = len(files)
-        # Шаги рисуем и в основном скрипте, а не только в обновляемом куске: иначе при каждом перезапуске
-        # (ввод вопроса, выбор файла) они на миг пропадают, и вся страница ниже прыгает вверх и вниз
-        if history is not None:
-            render_stepper(len(files), history)
 
         if files:
             count_col, clear_col = st.columns([1, 1], vertical_alignment="center")
@@ -243,12 +252,11 @@ with col_left:
         if too_many:
             st.warning(f"За один раз можно отправить не больше {MAX_FILES} файлов, сейчас выбрано {len(files)}.")
 
-        effective_question = question.strip()  # вопрос обязателен: без него отправка недоступна
-
+        # Вопрос обязателен: без него ничего не отправляется
         def fingerprint(f) -> str:
             """Отпечаток отправки (содержимое файла + тип документа + вопрос): одинаковый отпечаток значит, что это та же отправка."""
             digest = hashlib.sha256(f.getvalue()).hexdigest()[:16]
-            return f"{digest}|{DOC_TYPES[doc_label]}|{effective_question}"
+            return f"{digest}|{DOC_TYPES[doc_label]}|{question}"
 
         def already_sent() -> set:
             """Отпечатки отправок, задачи которых ещё есть на сервере (после очистки истории или через час файл можно слать снова)."""
@@ -270,7 +278,7 @@ with col_left:
                     resp = requests.post(
                         f"{API}/documents",
                         files={"file": (f.name, f.getvalue(), f.type)},
-                        data={"doc_type": DOC_TYPES[doc_label], "question": effective_question, "session_id": session_id},
+                        data={"doc_type": DOC_TYPES[doc_label], "question": question, "session_id": session_id},
                         timeout=30,
                     )
                 except requests.RequestException:
@@ -284,7 +292,7 @@ with col_left:
 
         # Делим выбранные файлы на новые и уже отправленные с этим же вопросом и типом документа.
         # Одинаковые файлы внутри одного выбора считаем одним.
-        by_fp = {fingerprint(f): f for f in files} if effective_question else {}
+        by_fp = {fingerprint(f): f for f in files} if question else {}
         sent_fps = already_sent() if by_fp else set()
         new_files = {fp: f for fp, f in by_fp.items() if fp not in sent_fps}
         sent_files = {fp: f for fp, f in by_fp.items() if fp in sent_fps}
@@ -295,7 +303,7 @@ with col_left:
         resend_clicked = st.button("Отправить повторно", icon=":material/refresh:", key="resend_btn") if sent_files else False
 
         # Строка занимает место всегда (текст в ней то есть, то нет), иначе всё, что ниже, прыгает при вводе вопроса
-        hint = "Введите вопрос, чтобы отправить документы на проверку." if files and not effective_question else "&nbsp;"
+        hint = "Введите вопрос, чтобы отправить документы на проверку." if files and not question else "&nbsp;"
         st.markdown(f'<div class="upload-count upload-hint">{hint}</div>', unsafe_allow_html=True)
 
         if send_clicked:
@@ -351,8 +359,7 @@ def result_view(job: dict) -> None:
     )
     if source_text:
         phrase = f"Эти реквизиты обязательны по {source_text} Положения." if issues else f"Основание: {source_text} Положения."
-        source_html = html_line('<div class="source">', svg("book", 16), f"<span>{html.escape(phrase)}</span>",
-                                f'<a href="{POLICY_URL}" target="_blank" rel="noopener">', svg("arrow_ur", 16), "</a></div>")
+        source_html = html_line('<div class="source">', svg("book", 16), f"<span>{html.escape(phrase)}</span></div>")
     else:
         source_html = ""
 
@@ -389,7 +396,7 @@ def toggle_button(flag: str, n: int, what: str, visible: int = 1) -> None:
 
 
 def queue_view(jobs: list) -> None:
-    """Карточка очереди: по строке на документ; свёрнутая показывает одну строку (остальные прокручиваются)."""
+    """Карточка очереди: строка на документ; в свёрнутом виде видны одна-две, остальные прокручиваются."""
     opened = st.session_state.get("q_open", False)
     n = len(jobs)
     shown_note = f" Показаны последние {MAX_SHOWN} из {n}." if n > MAX_SHOWN else ""
@@ -399,8 +406,7 @@ def queue_view(jobs: list) -> None:
                       f'<span class="count-pill">{n} {plural(n, "документ", "документа", "документов")}</span></div>'),
             unsafe_allow_html=True,
         )
-        # Ключ зависит от состояния: у свёрнутого списка ограничена высота (см. style.py), у раскрытого нет
-        # В свёрнутом виде видно 1 документ, если загружен один, и 2, если загружено два и больше
+        # В свёрнутом виде видно 1 документ, если он один, и 2, если их больше. Ключ задаёт высоту списка в style.py
         visible = 1 if n < 2 else 2
         with st.container(key="qlist_open" if opened else f"qlist_closed{visible}"):
             for job in reversed(jobs[-MAX_SHOWN:]):
@@ -429,12 +435,22 @@ def queue_view(jobs: list) -> None:
 
 @st.fragment(run_every=2)  # этот кусок сам обновляется каждые 2 секунды, не трогая форму слева
 def live_view() -> None:
-    """Раз в 2 секунды берёт у бэкенда задачи посетителя и рисует шаги, очередь и результаты, когда им есть что показать."""
+    """Раз в 2 секунды берёт у бэкенда задачи посетителя и рисует очередь и результаты, когда им есть что показать."""
     jobs = fetch_jobs()
     if jobs is None:
         st.error("Нет связи с сервером.")
         return
-    render_stepper(st.session_state.get("n_files", 0), jobs)
+    # Пока в фоне грузятся модели, документы ждут в очереди: объясняем это, а не показываем «ошибку»
+    health = fetch_health()
+    if health.get("state") == "loading":
+        st.markdown(html_line('<div class="model-banner"><div class="spinner"></div><div><b>Модель загружается</b>',
+                              "<span>Первая проверка начнётся, как только она будет готова, обычно это до минуты. Документы можно отправлять уже сейчас.</span></div></div>"),
+                    unsafe_allow_html=True)
+    elif health.get("state") == "failed":
+        st.markdown(html_line('<div class="model-banner failed"><div><b>Модель не загрузилась</b>',
+                              "<span>Проверка может не сработать. Подробности в логе бэкенда (data/logs/app.log).</span></div></div>"),
+                    unsafe_allow_html=True)
+
     if not jobs:
         with st.container(key="empty_card"):
             st.markdown(
@@ -453,7 +469,7 @@ def live_view() -> None:
                 if need_fix else f"Проверено: {len(done)}")
         st.markdown(f'<div class="sec-head"><span class="sec-title">Результаты</span><span class="sec-side">{side}</span></div>', unsafe_allow_html=True)
         r_opened = st.session_state.get("r_open", False)
-        # Свёрнутый список показывает один результат, остальные прокручиваются (высоту задаёт style.py по ключу)
+        # Свёрнутый список показывает один результат, остальные прокручиваются (высоту задаёт style.py)
         with st.container(key="rlist_open" if r_opened else "rlist_closed"):
             for job in reversed(done[-MAX_SHOWN:]):
                 result_view(job)

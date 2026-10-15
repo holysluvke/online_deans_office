@@ -1,15 +1,15 @@
 """
-Внешний вид страницы: цвета, шрифты, сетка, карточки с уголками, шаги, кнопки, светлая и тёмная темы, иконки.
-Логики здесь почти нет: она в app.py. Здесь CSS, набор иконок и скрипт перетаскивания файлов,
-которые app.py подключает одной командой render_header() в начале страницы.
+Внешний вид страницы: CSS (цвета, шрифты, сетка, карточки, кнопки, светлая и тёмная темы), иконки и скрипт.
+Логика страницы в app.py, он подключает всё это одной командой render_header().
 
 Как это устроено:
-    - Streamlit сам не умеет рисовать такие карточки, поэтому мы добавляем блок CSS (строка CSS ниже)
-      через st.markdown. Контейнеры с key="..." получают класс st-key-<key>, по нему их и красим.
-    - Все цвета лежат переменными в блоке :root. Меняешь цвет там, и он меняется везде.
-    - Основная тема тёмная (как в макете). Светлая включается по настройке системы.
-    - Картинки (логотип и папка в шапке) лежат в ui/assets и вставляются в страницу как data-URI: asset_uri("имя").
-    - Иконки это SVG-строки в словаре ICONS; svg("имя") вставляет их в HTML.
+    - CSS вставляется через st.markdown. Контейнеры с key="..." получают класс st-key-<key>, по нему их и красим.
+    - Цвета лежат переменными в блоке :root (тёмная тема) и в @media (светлая, по настройке системы).
+    - Радиусы скругления это три переменные --r-* в начале CSS.
+    - Картинки (папка справа) лежат в ui/assets и вставляются в HTML как data-URI: asset_uri("имя").
+    - Шрифты Unbounded (заголовки) и Manrope (текст) лежат в ui/assets/fonts и вставляются в страницу (font_css),
+      поэтому страница выглядит так же без интернета. Если шрифт всё же не загрузится, подставится системный.
+    - Иконки это SVG-строки в словаре ICONS: svg("имя") вставляет их в HTML.
 """
 import base64
 from pathlib import Path
@@ -28,10 +28,8 @@ def asset_uri(name: str) -> str:
     mime = {"webp": "image/webp", "png": "image/png", "jpg": "image/jpeg", "svg": "image/svg+xml"}[path.suffix[1:]]
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
-# Иконки (набор Lucide), рисуются линией текущего цвета текста
+# Иконки (набор Lucide): рисуются линией цвета текста
 ICONS = {
-    "cap": '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
-    "help": '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
     "check": '<path d="M20 6 9 17l-5-5"/>',
     "file_check": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/>',
     "file": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
@@ -45,7 +43,6 @@ ICONS = {
     "circle_alert": '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
     "minus": '<path d="M5 12h14"/>',
     "upload": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
-    "list": '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
 }
 
 
@@ -58,17 +55,14 @@ def svg(name: str, size: int = 18) -> str:
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
-
-/* ---------- палитра: тёмная тема (основная, как в макете) ----------
-   Все цвета меняются здесь, в одном месте. */
+/* ---------- палитра: тёмная тема (основная) ---------- */
 :root {
     --bg: #09090B;          /* фон страницы */
     --card: #101113;        /* карточки и поля */
     --field: #0D0E10;       /* зона загрузки и вложенные блоки */
     --raised: #17181B;      /* плашки, строки файлов */
     --line: #212226;        /* границы */
-    --line-hi: #3A3C42;     /* уголки карточек */
+    --line-hi: #3A3C42;     /* рамки полей и кнопок */
     --grid: rgba(255, 255, 255, .035);
     --text: #FFFFFD;
     --title: #F0ECE3;       /* большой заголовок */
@@ -76,15 +70,16 @@ CSS = """
     --muted: #868789;       /* подписи */
     --btn: #1C2C4D;         /* главная кнопка */
     --btn-text: #FFFFFF;
-    --accent: #1C2C4D;
-    --accent-text: #A9B6EE; /* акцент в тексте и иконках */
-    --accent-soft: #1A2240;
+    --accent-text: #A9B6EE; /* акцент в тексте */
     --ok: #7BCEAE;  --ok-bg: rgba(76, 214, 160, .13);
     --warn: #E8BC78; --warn-bg: #2A2419;
     --info: #A9B6EE; --info-bg: #1A2240;
     --err: #FF8E8E;  --err-bg: rgba(255, 123, 123, .12);
     --bar: var(--accent-text);
-    --glow: rgba(70, 90, 190, .16);
+    --glow: rgba(70, 90, 190, .16);   /* свечение сверху справа */
+    --r-card: 18px; --r-field: 12px; --r-small: 8px;   /* скругления */
+    --font-body: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;   /* запас: системный */
+    --font-head: 'Unbounded', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
 }
 
 /* ---------- палитра: светлая тема (включается по настройке системы) ---------- */
@@ -93,23 +88,23 @@ CSS = """
         --bg: #F4F4F2; --card: #FFFFFF; --field: #FAFAF8; --raised: #EDEDE8; --line: #E3E3DE; --line-hi: #B9B9B2;
         --grid: rgba(17, 17, 17, .045);
         --text: #111111; --title: #111111; --text2: #4A4D55; --muted: #6B6F76;
-        --btn: #1A1AE6; --btn-text: #FFFFFF; --accent: #1A1AE6; --accent-text: #1A1AE6; --accent-soft: #E6E6FB;
+        --btn: #1A1AE6; --btn-text: #FFFFFF; --accent-text: #1A1AE6;
         --ok: #15805A; --ok-bg: #E3F5EC; --warn: #9A6410; --warn-bg: #FBF1DC;
         --info: #1A1AE6; --info-bg: #E6E6FB; --err: #C23A3A; --err-bg: #FBE7E7;
         --glow: rgba(26, 26, 230, .08);
     }
-    /* в светлой теме берётся отдельная картинка (folder_light.webp) с прозрачной светлой задней стенкой и мягкая светлая тень */
+    /* для светлой темы своя картинка папки (folder_light.webp) и мягкая тень */
     .hero-art img {filter: drop-shadow(0 14px 26px rgba(90, 100, 130, .14)) !important;}
 }
 
 /* ---------- базовое ---------- */
 #MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"] {display: none !important;}
-[data-testid="stHeaderActionElements"] {display: none;}
-/* полоса под шапкой шире окна на ширину прокрутки: без этого внизу появлялась горизонтальная прокрутка */
+/* значок-ссылка, который Streamlit показывает у заголовков при наведении */
+[data-testid="stHeaderActionElements"], [data-testid="stHeadingActionElements"] {display: none !important;}
+/* линия под шапкой шире окна на ширину прокрутки: без этого внизу появляется горизонтальная прокрутка */
 html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {overflow-x: hidden !important;}
-/* пока Streamlit перерисовывает страницу (например, после ввода вопроса), он на долю секунды тускнит старые блоки: это и выглядело как дёргание */
+/* Streamlit при перерисовке на миг тускнит старые блоки, из-за чего страница мерцает: отключаем */
 [data-stale="true"], [data-stale="true"] * {opacity: 1 !important; transition: none !important;}
-[data-testid="stAppViewContainer"] * {scroll-behavior: auto !important;}
 /* фон: тонкая сетка и мягкое свечение сверху */
 [data-testid="stAppViewContainer"], .stApp {
     background:
@@ -120,22 +115,21 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 [data-testid="stMainBlockContainer"] {max-width: 1160px !important; padding: 0 2rem 2rem !important;}
 .stApp, .stApp p, .stApp label, .stApp li, .stApp small, .stApp input, .stApp textarea,
 .stApp button, .stApp [data-testid="stMarkdownContainer"],
-.stApp span:not([data-testid="stIconMaterial"]) {font-family: 'Manrope', sans-serif !important;}
+.stApp span:not([data-testid="stIconMaterial"]) {font-family: var(--font-body) !important;}
 .stApp {color: var(--text);}
 [data-testid="stVerticalBlock"] {gap: 1rem;}
 .stApp svg {flex: none;}
-.hero-title, .card-title, .sec-title, .next-t, .page-drop b, .step-ic, .step-t, .brand-tag, .count-pill {font-family: 'Unbounded', 'Arial Black', sans-serif !important;}
+.card-title, .sec-title, .next-t, .page-drop b, .step-ic, .step-t, .brand-tag, .count-pill {font-family: var(--font-head) !important;}
 
-/* ---------- верхняя полоса ---------- */
+/* ---------- шапка: иконка слева, «Как это работает» справа ---------- */
 .topbar {display: flex; align-items: center; gap: 14px; height: 36px;}
 .brand-tag {font-size: .68rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); white-space: nowrap;}
-.logo {width: 34px; height: 34px; border: 1px solid var(--line-hi); display: grid; place-items: center; background: var(--raised); color: var(--text);}
-.logo img {width: 22px; height: 23px; display: block;}
+.logo {width: 34px; height: 34px; border: 1px solid var(--line-hi); border-radius: var(--r-field); display: grid; place-items: center; background: var(--raised); color: var(--text);}
 .st-key-topbar {position: relative; margin-bottom: 4px; padding: 12px 0 27px !important;}
 .st-key-topbar::after {content: ""; position: absolute; left: 50%; bottom: 0; width: 100vw; transform: translateX(-50%);
                        border-bottom: 1px solid var(--line);}
 .st-key-topbar [data-testid="stVerticalBlock"] {gap: 0;}
-.st-key-help_btn button {background: transparent !important; border: 0 !important; color: var(--text2) !important;
+.st-key-help_btn button {background: transparent !important; border: 0 !important; color: var(--text2) !important; border-radius: var(--r-small) !important;
                          box-shadow: none !important; justify-content: flex-end;}
 .st-key-help_btn button:hover {color: var(--text) !important;}
 .st-key-help_btn {width: 100%; display: flex; justify-content: flex-end; position: relative; top: 7px;}
@@ -143,7 +137,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 
 /* ---------- верхний блок: заголовок и папка ---------- */
 .hero {display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 8px 0 14px;}
-.stApp h1.hero-title {font-family: 'Unbounded', 'Arial Black', sans-serif !important; font-size: clamp(1.7rem, 7.4vw, 5.8rem) !important; font-weight: 800 !important;
+.stApp h1.hero-title {font-family: var(--font-head) !important; font-size: clamp(1.7rem, 7.4vw, 5.8rem) !important; font-weight: 800 !important;
              line-height: 1 !important; letter-spacing: -.015em !important; text-transform: uppercase; padding: 0 !important;
              color: var(--title) !important; margin: 0 0 22px !important; overflow-wrap: anywhere;}
 .page-sub {color: var(--text2); font-size: .95rem; max-width: 520px; line-height: 1.55; margin: 0;}
@@ -153,7 +147,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 /* ---------- шаги ---------- */
 .stepper {display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 18px 0; border-top: 1px solid var(--line);}
 .step {display: flex; align-items: center; gap: 14px; min-width: 0;}
-.step-ic {width: 28px; height: 28px; border: 1px solid var(--line-hi); display: grid; place-items: center; flex: none;
+.step-ic {width: 28px; height: 28px; border: 1px solid var(--line-hi); border-radius: var(--r-small); display: grid; place-items: center; flex: none;
           font-size: .62rem; font-weight: 500; color: var(--muted); background: transparent;}
 .step.done .step-ic {color: var(--text2);}
 .step.current .step-ic {border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent);}
@@ -163,25 +157,14 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .step.current .step-s.hl {color: var(--accent-text);}
 .step-line {flex: 1; height: 1px; background: var(--line); min-width: 24px; align-self: center;}
 
-/* ---------- карточки с уголками ---------- */
-.st-key-upload_card, .card, .st-key-queue_card, [class*="st-key-res_"], .st-key-next_card, .st-key-empty_card {
-    --br: var(--line-hi);
-    border: 1px solid var(--line) !important; border-radius: 0 !important; padding: 22px 24px !important; position: relative;
-    background:
-        linear-gradient(var(--br), var(--br)) left top / 10px 1px no-repeat,
-        linear-gradient(var(--br), var(--br)) left top / 1px 10px no-repeat,
-        linear-gradient(var(--br), var(--br)) right top / 10px 1px no-repeat,
-        linear-gradient(var(--br), var(--br)) right top / 1px 10px no-repeat,
-        linear-gradient(var(--br), var(--br)) left bottom / 10px 1px no-repeat,
-        linear-gradient(var(--br), var(--br)) left bottom / 1px 10px no-repeat,
-        linear-gradient(var(--br), var(--br)) right bottom / 10px 1px no-repeat,
-        linear-gradient(var(--br), var(--br)) right bottom / 1px 10px no-repeat,
-        var(--card) !important;}
-.card {padding: 22px 24px; margin-bottom: 1rem;}
+/* ---------- карточки ---------- */
+.st-key-upload_card, .st-key-queue_card, [class*="st-key-res_"], .st-key-next_card, .st-key-empty_card {
+    border: 1px solid var(--line) !important; border-radius: var(--r-card) !important; padding: 22px 24px !important;
+    background: var(--card) !important;}
 .card-head {display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;}
 .card-title {font-size: 1.35rem; font-weight: 700; letter-spacing: -.015em; color: var(--text); margin: 0; line-height: 1.2;}
 .card-desc {font-size: .85rem; color: var(--text2); line-height: 1.5; margin: 8px 0 4px;}
-.count-pill {border: 1px solid var(--line-hi); color: var(--text2); font-size: .68rem; font-weight: 600; padding: 4px 10px; letter-spacing: .04em;}
+.count-pill {border-radius: 999px; border: 1px solid var(--line-hi); color: var(--text2); font-size: .68rem; font-weight: 600; padding: 4px 10px; letter-spacing: .04em;}
 .card-note {font-size: .78rem; color: var(--muted); margin-top: 14px;}
 .sec-head {display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0;}
 .sec-title {font-size: 1.35rem; font-weight: 700; letter-spacing: -.015em; color: var(--text);}
@@ -200,14 +183,15 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 [data-testid="stTextInput"] input, [data-testid="stSelectbox"] [data-baseweb="select"] > div,
 [data-testid="stSelectbox"] [role="group"], [data-testid="stSelectbox"] input {background: var(--card) !important; color: var(--text) !important;}
 [data-testid="stTextInput"] > div > div, [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-    background: var(--card) !important; border: 1px solid var(--line-hi) !important; border-radius: 0 !important;}
-[data-testid="stSelectbox"] [data-baseweb="select"], [data-testid="stSelectbox"] [data-baseweb="select"] *, [data-testid="stTextInput"] [data-baseweb] {border-radius: 0 !important;}
+    background: var(--card) !important; border: 1px solid var(--line-hi) !important;}
+[data-testid="stTextInput"] [data-baseweb], [data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] * {border-radius: var(--r-field) !important;}
 [data-testid="InputInstructions"] {display: none !important;}
 [data-testid="stTextInput"] input::placeholder {color: var(--muted);}
 
 /* ---------- зона загрузки ---------- */
 [data-testid="stFileUploaderDropzone"] {
-    background: var(--field); border: 1px dashed var(--line-hi); border-radius: 0; padding: 28px 16px;
+    background: var(--field); border: 1px dashed var(--line-hi); border-radius: var(--r-field); padding: 28px 16px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer;}
 [data-testid="stFileUploaderDropzone"]:hover {border-color: var(--text2);}
 /* настоящую кнопку и английские подписи прячем: клик по всей зоне и так открывает окно выбора файлов */
@@ -225,8 +209,8 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 [data-testid="stFileChips"] > div {display: flex; flex-direction: column; align-items: stretch; gap: 8px;}
 [data-testid="stFileChips"] > div > div {display: flex; flex-direction: column; gap: 8px;}
 [data-testid="stFileChip"] {display: flex !important; align-items: center; gap: 12px; background: var(--raised) !important;
-                            border: 1px solid var(--line); border-radius: 0 !important; padding: 10px 12px !important; width: 100%;}
-[data-testid="stFileChip"] > div:first-child {width: 34px; height: 34px; border-radius: 0; background: var(--card) !important; border: 1px solid var(--line-hi);
+                            border: 1px solid var(--line); border-radius: var(--r-field) !important; padding: 10px 12px !important; width: 100%;}
+[data-testid="stFileChip"] > div:first-child {width: 34px; height: 34px; border-radius: var(--r-small); background: var(--card) !important; border: 1px solid var(--line-hi);
                                               display: grid; place-items: center; flex: none;}
 [data-testid="stFileChip"] > div:first-child svg {color: var(--text2); fill: var(--text2);}
 [data-testid="stFileChip"] > div:nth-child(2) {flex: 1; min-width: 0;}
@@ -242,7 +226,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 
 /* ---------- кнопки ---------- */
 [data-testid="stBaseButton-secondary"] {
-    background: transparent; border: 1px solid var(--line-hi); color: var(--text) !important; border-radius: 0;
+    background: transparent; border: 1px solid var(--line-hi); color: var(--text) !important; border-radius: var(--r-field);
     min-height: 44px; font-weight: 500; width: 100%; box-shadow: none;}
 [data-testid="stBaseButton-secondary"]:hover {border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent);}
 [data-testid="stBaseButton-secondary"] p {color: var(--text) !important; font-size: .85rem !important;}
@@ -254,7 +238,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
     opacity: 1; cursor: not-allowed; background: transparent; border: 1px dashed var(--line-hi); filter: none;}
 [data-testid="stBaseButton-secondary"]:disabled p, [data-testid="stBaseButton-secondary"]:disabled span,
 .st-key-send_btn [data-testid="stBaseButton-secondary"]:disabled p, .st-key-send_btn [data-testid="stBaseButton-secondary"]:disabled span {color: var(--muted) !important;}
-[data-testid="stBaseButton-primary"] {background: var(--btn); border: 0; border-radius: 0; color: var(--btn-text) !important; font-weight: 600;}
+[data-testid="stBaseButton-primary"] {background: var(--btn); border: 0; border-radius: var(--r-field); color: var(--btn-text) !important; font-weight: 600;}
 [data-testid="stBaseButton-primary"] p {color: var(--btn-text) !important;}
 .st-key-send_btn, .st-key-resend_btn, .st-key-send_btn [data-testid="stButton"], .st-key-resend_btn [data-testid="stButton"] {width: 100%;}
 .st-key-help_btn [data-testid="stBaseButton-secondary"], .st-key-clear_files [data-testid="stBaseButton-secondary"] {width: auto; min-height: 0; background: transparent; border: 0;}
@@ -279,26 +263,26 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 /* кнопка «Показать все» / «Свернуть»: спокойная, на всю ширину блока */
 .st-key-q_open_btn, .st-key-r_open_btn {margin-top: 10px;}
 .st-key-q_open_btn, .st-key-r_open_btn, .st-key-q_open_btn [data-testid="stButton"], .st-key-r_open_btn [data-testid="stButton"] {width: 100%;}
-.st-key-q_open_btn button, .st-key-r_open_btn button {width: 100%; min-height: 38px; background: transparent !important; border: 1px solid var(--line) !important;}
+.st-key-q_open_btn button, .st-key-r_open_btn button {width: 100%; min-height: 38px; background: transparent !important; border: 1px solid var(--line) !important; border-radius: var(--r-field) !important;}
 .st-key-q_open_btn button p, .st-key-r_open_btn button p, .st-key-q_open_btn button span, .st-key-r_open_btn button span {color: var(--text2) !important; font-size: .8rem !important;}
 .st-key-q_open_btn button:hover, .st-key-r_open_btn button:hover {border-color: var(--text2) !important;}
 
 /* ---------- очередь ---------- */
 .qrow {display: grid; grid-template-columns: 44px 1fr auto; gap: 4px 14px; align-items: center; align-content: center; padding: 6px 0; box-sizing: border-box; min-height: 84px;}
 .st-key-queue_card [data-testid="stMarkdownContainer"]:has(.qrow) {margin-bottom: 0 !important;}
-.qicon {width: 44px; height: 44px; border: 1px solid var(--line-hi); color: var(--text2); display: grid; place-items: center;}
+.qicon {width: 44px; height: 44px; border: 1px solid var(--line-hi); border-radius: var(--r-field); color: var(--text2); display: grid; place-items: center;}
 .qname {font-size: .9rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere;}
 .qsub {font-size: .75rem; color: var(--muted);}
 .qside {display: flex; flex-direction: column; align-items: flex-end; gap: 6px;}
 .qstat {font-size: .75rem; color: var(--muted);}
 .pill {display: inline-flex; align-items: center; gap: 6px; font-size: .68rem; font-weight: 700; padding: 4px 10px; white-space: nowrap;
-       text-transform: uppercase; letter-spacing: .06em;}
+       text-transform: uppercase; letter-spacing: .06em; border-radius: 999px;}
 .pill.done {color: var(--ok); background: var(--ok-bg);}
 .pill.processing {color: var(--info); background: var(--info-bg);}
 .pill.queued {color: var(--text2); background: var(--raised);}
 .pill.error {color: var(--err); background: var(--err-bg);}
-.qbar {grid-column: 1 / -1; height: 4px; background: var(--raised); overflow: hidden;}
-.qbar span {display: block; height: 100%; background: var(--bar); transition: width .6s ease;}
+.qbar {grid-column: 1 / -1; height: 4px; background: var(--raised); overflow: hidden; border-radius: 999px;}
+.qbar span {display: block; height: 100%; background: var(--bar); border-radius: 999px; transition: width .6s ease;}
 .qrow.processing .qbar span {background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.22) 0 8px, transparent 8px 16px);
     background-size: 22.6px 22.6px; animation: bar-move 1s linear infinite;}
 @keyframes bar-move {to {background-position: 22.6px 0;}}
@@ -313,7 +297,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .rname {display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: .95rem; color: var(--text); overflow-wrap: anywhere;}
 .rname svg {color: var(--text2);}
 .rtag {font-size: .75rem; color: var(--muted); white-space: nowrap;}
-.verdict {display: flex; gap: 12px; padding: 16px 18px; margin-bottom: 16px; border-left: 3px solid currentColor;}
+.verdict {display: flex; gap: 12px; padding: 16px 18px; margin-bottom: 16px; border-left: 3px solid currentColor; border-radius: var(--r-field);}
 .verdict svg {margin-top: 2px;}
 .verdict b {display: block; font-size: 1rem; font-weight: 600; margin-bottom: 4px;}
 .verdict span {font-size: .82rem; color: var(--text2); line-height: 1.5;}
@@ -321,10 +305,10 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .verdict.ok {background: var(--ok-bg); color: var(--ok);}
 .verdict.no_answer {background: var(--info-bg); color: var(--info);}
 .issue {display: flex; gap: 14px; margin: 14px 0;}
-.issue-ic {width: 28px; height: 28px; background: var(--warn-bg); color: var(--warn); display: grid; place-items: center; flex: none;}
+.issue-ic {width: 28px; height: 28px; border-radius: var(--r-small); background: var(--warn-bg); color: var(--warn); display: grid; place-items: center; flex: none;}
 .issue b {display: block; font-size: .9rem; font-weight: 600; color: var(--text);}
 .issue span {font-size: .82rem; color: var(--text2);}
-.source {display: flex; align-items: center; gap: 10px; background: var(--field); border: 1px solid var(--line); padding: 12px 14px; margin-top: 16px;
+.source {display: flex; align-items: center; gap: 10px; background: var(--field); border: 1px solid var(--line); padding: 12px 14px; margin-top: 16px; border-radius: var(--r-field);
          font-size: .82rem; color: var(--text2);}
 .source a {margin-left: auto; color: var(--text2); display: flex;}
 [class*="st-key-res_"] [data-testid="stExpander"] details {background: transparent; border: 0;}
@@ -335,7 +319,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 .next-t {font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 6px;}
 .next-p {font-size: .85rem; color: var(--text2); margin-bottom: 16px;}
 .cta {display: inline-flex; align-items: center; gap: 10px; background: var(--btn); color: var(--btn-text) !important; text-decoration: none !important;
-      font-weight: 600; font-size: .85rem; padding: 12px 18px;}
+      font-weight: 600; font-size: .85rem; padding: 12px 18px; border-radius: var(--r-field);}
 .cta:hover {filter: brightness(1.15);}
 
 /* ---------- подвал ---------- */
@@ -353,7 +337,7 @@ html, body, .stApp, [data-testid="stMain"], [data-testid="stAppViewContainer"] {
 [data-testid="stMainBlockContainer"] {transition: filter .2s ease;}
 body.page-drop-active [data-testid="stMainBlockContainer"] {filter: blur(8px) brightness(.75);}
 .page-drop {position: fixed; inset: 14px; z-index: 1000000; pointer-events: none; opacity: 0;
-            border: 1px dashed var(--text); transition: opacity .2s ease;
+            border: 1px dashed var(--text); border-radius: var(--r-card); transition: opacity .2s ease;
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
             background: color-mix(in srgb, var(--text) 6%, transparent);}
 body.page-drop-active .page-drop {opacity: 1;}
@@ -362,23 +346,15 @@ body.page-drop-active .page-drop {opacity: 1;}
 /* невидимый iframe со скриптом не должен занимать место в странице */
 [data-testid="stElementContainer"]:has(iframe[height="0"], [data-testid="stIFrame"]) {position: absolute; height: 0; margin: 0; overflow: hidden;}
 
-/* ---------- скругления: размеры меняются здесь ---------- */
-:root {--r-card: 18px; --r-field: 12px; --r-small: 8px;}
-.st-key-upload_card, .card, .st-key-queue_card, [class*="st-key-res_"], .st-key-next_card, .st-key-empty_card {
-    border-radius: var(--r-card) !important; background: var(--card) !important;}   /* уголки-скобки на скруглённых карточках не нужны */
-[data-testid="stTextInput"] > div > div, [data-testid="stSelectbox"] [data-baseweb="select"], [data-testid="stSelectbox"] [data-baseweb="select"] > div,
-[data-testid="stSelectbox"] [data-baseweb="select"] *, [data-testid="stTextInput"] [data-baseweb] {border-radius: var(--r-field) !important;}
-[data-testid="stFileUploaderDropzone"], [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"],
-.st-key-clear_hist [data-testid="stBaseButton-secondary"], .st-key-q_open_btn button, .st-key-r_open_btn button, .source, .cta {border-radius: var(--r-field) !important;}
-.st-key-help_btn [data-testid="stBaseButton-secondary"], .st-key-clear_files [data-testid="stBaseButton-secondary"] {border-radius: var(--r-small) !important;}
-[data-testid="stFileChip"] {border-radius: var(--r-field) !important;}
-[data-testid="stFileChip"] > div:first-child, .logo, .qicon, .issue-ic, .step-ic {border-radius: var(--r-small) !important;}
-.logo, .qicon {border-radius: var(--r-field) !important;}
-.count-pill, .pill {border-radius: 999px !important;}
-.verdict {border-radius: var(--r-field) !important;}
-.qbar, .qbar span {border-radius: 999px !important;}
-.page-drop {border-radius: var(--r-card) !important;}
-[class*="st-key-res_"] [data-testid="stExpander"] details {border-radius: var(--r-field) !important;}
+/* ---------- плашка «модель загружается» ---------- */
+.model-banner {margin-bottom: 1rem; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r-field);
+               background: var(--info-bg); color: var(--info); font-size: .85rem; line-height: 1.5;}
+.model-banner b {display: block; font-size: .95rem; font-weight: 600; margin-bottom: 2px;}
+.model-banner span {color: var(--text2);}
+.model-banner.failed {background: var(--warn-bg); color: var(--warn);}
+.spinner {flex: none; width: 18px; height: 18px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;}
+@keyframes spin {to {transform: rotate(360deg);}}
+@media (prefers-reduced-motion: reduce) {.spinner {animation: none;}}
 
 /* ---------- узкий экран ---------- */
 @media (max-width: 800px) {
@@ -390,8 +366,8 @@ body.page-drop-active .page-drop {opacity: 1;}
 </style>
 """
 
-# Скрипт запускается в невидимом iframe, но вешает слушатели на саму страницу (iframe того же origin).
-# Брошенные файлы кладём в настоящее поле загрузки Streamlit и сообщаем ему об изменении.
+# Скрипт работает в невидимом iframe, но вешает слушатели на саму страницу (iframe того же origin):
+# 1) перетаскивание файлов в любое место страницы; 2) применение вопроса без нажатия Enter.
 PAGE_DROP_JS = """
 <script>
 (function () {
@@ -460,6 +436,7 @@ PAGE_DROP_JS = """
 """
 
 
+# Какие участки символов в каком файле шрифта: кириллица и латиница лежат отдельно
 _RANGES = {
     "cyrillic": "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116",
     "latin": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215",
@@ -467,15 +444,17 @@ _RANGES = {
 
 
 def font_css() -> str:
-    """Шрифт Unbounded для заголовков: файлы лежат в ui/assets/fonts и вставляются в страницу, интернет для них не нужен."""
+    """@font-face для Unbounded (веса 700 и 800) и Manrope (переменный, 200-800): файлы из ui/assets/fonts вставляются в страницу, интернет не нужен."""
     faces = []
-    for weight in (700, 800):
+    sources = [("Unbounded", f"unbounded-{{subset}}-{w}-normal.woff2", str(w)) for w in (700, 800)]
+    sources.append(("Manrope", "manrope-{subset}-wght-normal.woff2", "200 800"))
+    for family, pattern, weight in sources:
         for subset, ranges in _RANGES.items():
-            path = ASSETS / "fonts" / f"unbounded-{subset}-{weight}-normal.woff2"
+            path = ASSETS / "fonts" / pattern.format(subset=subset)
             if path.exists():
                 data = base64.b64encode(path.read_bytes()).decode()
                 faces.append(
-                    f"@font-face {{font-family: 'Unbounded'; font-weight: {weight}; font-style: normal; font-display: swap; "
+                    f"@font-face {{font-family: '{family}'; font-weight: {weight}; font-style: normal; font-display: swap; "
                     f"src: url(data:font/woff2;base64,{data}) format('woff2'); unicode-range: {ranges};}}"
                 )
     return "<style>" + "".join(faces) + "</style>"

@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from backend.pipeline import extract_fields, answer_question
 from backend.db import insert_job, get_job, update_job, get_unfinished_jobs
 from backend.log import log
+from backend import warmup
 
 
 # Один рабочий => задачи идут строго по очереди
@@ -44,6 +45,7 @@ def _run(job_id: str) -> None:
     if job is None:
         log.info("Задача %s пропущена: удалена, пока ждала в очереди", job_id)
         return  # задачу успели удалить (автоудаление или очистка), пока она ждала в очереди
+    warmup.wait()  # пока грузятся модели, задача остаётся в очереди (страница пишет «модель загружается»)
     start = time.perf_counter()
     step = "OCR (extract_fields)"
     try:
@@ -64,4 +66,4 @@ def _run(job_id: str) -> None:
         # Любая ошибка внутри pipeline.py не ломает очередь: задача получает статус error,
         # страница покажет текст ошибки, а в лог уходит полная трассировка. Остальные задачи идут дальше.
         log.exception("Задача %s: ошибка на шаге %s (%s)", job_id, step, job["doc_type"])
-        update_job(job_id, status="error", error=str(e))
+        update_job(job_id, status="error", error=str(e))
