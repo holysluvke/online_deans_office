@@ -4,7 +4,7 @@
 Answer собирается в completeness.py, lookup.py и здесь.
 На границе стыка с jobs.py вызывается to_dict() — jobs.py сериализует ответ в JSON.
 """
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 
 from .rules import DECISION_CLAUSE
 
@@ -29,7 +29,13 @@ class Answer:
     missing_fields: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+        "status":     self.status,
+        "message":    self.message,
+        "sources":    self.sources,
+        "answerable": self.answerable,
+        "value":      self.value,
+    }
 
 
 def who_decides() -> Answer:

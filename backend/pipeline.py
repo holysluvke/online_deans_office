@@ -55,7 +55,6 @@ import time
 from backend.knowledge import (
     check_completeness,
     field_lookup,
-    no_answer,
     who_decides,
 )
 
@@ -89,15 +88,15 @@ def _classify(question: str) -> str:
 
 def answer_question(fields: dict, doc_type: str, question: str) -> dict:
     """RAG: по полям документа и вопросу вернуть ответ со ссылкой на пункт Положения."""
-    kind = _classify(question)
+    q = question.lower().strip()
 
-    if kind == "who_decides":
-        answer = who_decides()
-    elif kind == "completeness":
-        answer = check_completeness(fields, doc_type)
-    elif kind == "field_lookup":
-        answer = field_lookup(fields, doc_type, question) or no_answer()
-    else:
-        answer = no_answer()
+    # Q3: кто принимает окончательное решение
+    if "кто принимает окончательное решение" in q:
+        return who_decides().to_dict()
 
-    return answer.to_dict()
+    # Q1: содержит ли документ все обязательные сведения
+    if "содержит ли документ все обязательные" in q or "все обязательные сведения" in q:
+        return check_completeness(fields, doc_type).to_dict()
+
+    # Q2 + fallback: field_lookup сам вернёт no_answer, если поле не распознано
+    return field_lookup(fields, doc_type, question).to_dict()
