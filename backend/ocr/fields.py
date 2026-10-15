@@ -4,10 +4,28 @@
 Ключи фиксированы типом документа. Вложенных словарей, списков и None нет.
 Чего нет на листе — строка «не найдено», печать и подпись — False.
 Полный текст OCR сюда не кладётся: он остаётся в результате run_ocr.
+
+Значение берём только из строки своей метки. Пустая метка не забирает
+следующую строку, если та сама начинается с другой метки. Дату не угадываем
+по порядку дат в документе: либо подпись «Дата начала…» / «Дата окончания…»,
+либо пара дат на одной строке периода.
 """
 import re
 
-import numpy as np
+from backend.ocr.marks import detect_marks
+from backend.ocr.marks import find_seals as find_seals
+from backend.ocr.normalize import (
+    FORMS,
+    GRADES,
+    REASONS,
+    closed_or_raw,
+    closest_label,
+    fix_digits,
+    number_for,
+    ordered_span,
+    parse_dates,
+    snap,
+)
 
 MISSING = "не найдено"
 
@@ -20,21 +38,50 @@ KINDS = {
     "internship_certificate": "practice",
 }
 
-MONTHS = {
-    "января": 1, "февраля": 2, "марта": 3, "апреля": 4,
-    "мая": 5, "июня": 6, "июля": 7, "августа": 8,
-    "сентября": 9, "октября": 10, "ноября": 11, "декабря": 12,
-}
+# Длинные метки раньше коротких: «дата начала практики» не равна «дата начала».
+_LABELS = tuple(sorted({
+    "фио руководителя практики",
+    "фио студента",
+    "название организации",
+    "название вуза",
+    "направление подготовки",
+    "начало периода обучения",
+    "окончание периода обучения",
+    "дата начала практики",
+    "дата окончания практики",
+    "дата начала отпуска",
+    "дата окончания отпуска",
+    "дата начала обучения",
+    "дата окончания обучения",
+    "начало практики",
+    "окончание практики",
+    "начало отпуска",
+    "окончание отпуска",
+    "дата начала",
+    "дата окончания",
+    "номер справки",
+    "номер документа",
+    "руководитель практики",
+    "причина отпуска",
+    "форма обучения",
+    "учебная группа",
+    "дата выдачи",
+    "дата заявления",
+    "специальность",
+    "организация",
+    "направление",
+    "фамилия",
+    "оценка",
+    "группа",
+    "номер",
+    "курс",
+    "фио",
+    "вуз",
+}, key=len, reverse=True))
 
 NAME = r"[А-ЯЁ][а-яё]+(?:[ \t]+[А-ЯЁ][а-яё]+){1,3}"
-REASONS = (
-    "по состоянию здоровья",
-    "по семейным обстоятельствам",
-    "по уходу за ребенком",
-    "по уходу за ребёнком",
-    "в связи с призывом",
-)
-GRADES = ("отлично", "хорошо", "удовлетворительно", "зачтено", "неудовлетворительно")
+GROUP = re.compile(r"(?<![А-Яа-яЁёA-Za-z0-9])([А-ЯЁ]{1,8}-\d{2}-\d)(?!\d)")
+NUMBER = re.compile(r"(ОБ|ПР|OB|PR|NP)\s*[-–—]\s*(\d+)", flags=re.IGNORECASE)
 
 
 def pick_fields(doc_type: str, ocr: dict, images: list) -> dict:
@@ -46,7 +93,7 @@ def pick_fields(doc_type: str, ocr: dict, images: list) -> dict:
     for page in ocr.get("pages", []):
         rows.extend(line for line in page.get("text", "").split("\n") if line.strip())
     blob = "\n".join(rows)
-    signed, sealed = _marks(images, ocr.get("pages", []))
+    signed, sealed = detect_marks(images, ocr.get("pages", []), doc_type)
 
     if kind == "study":
         return _study(rows, blob, signed, sealed)
@@ -56,60 +103,129 @@ def pick_fields(doc_type: str, ocr: dict, images: list) -> dict:
 
 
 def _study(rows: list[str], blob: str, signed: bool, sealed: bool) -> dict:
-    start, end = _period(rows, ("период", "срок обучения", "обучен"))
-    number, issued = _number_and_issue(rows, blob)
+    start, end = _span(
+        rows,
+        ("начало периода обучения", "дата начала обучения", "дата начала"),
+        ("окончание периода обучения", "дата окончания обучения", "дата окончания"),
+        ("период обучения", "срок обучения"),
+    )
     return {
         "student_name": _name(rows, blob) or MISSING,
-        "university": _university(blob) or MISSING,
-        "program": _labeled(rows, r"направлен\w*(?:\s+подготовки)?|специальност\w*|программ\w*") or MISSING,
-        "study_form": _form(blob) or MISSING,
+        "university": _university(rows, blob) or MISSING,
+        "program": _labeled(rows, ("направление подготовки", "направление", "специальность")) or MISSING,
+        "study_form": _form(rows, blob) or MISSING,
         "study_start": start or MISSING,
         "study_end": end or MISSING,
-        "document_number": number or MISSING,
-        "issue_date": issued or MISSING,
+        "document_number": _document_number(rows, "study") or MISSING,
+        "issue_date": _issue_date(rows) or MISSING,
         "signature_present": signed,
         "seal_present": sealed,
     }
 
 
 def _leave(rows: list[str], blob: str, signed: bool) -> dict:
-    start, end = _period(rows, ("отпуск", "прошу", "с "))
+    start, end = _span(
+        rows,
+        ("дата начала отпуска", "начало отпуска", "дата начала"),
+        ("дата окончания отпуска", "окончание отпуска", "дата окончания"),
+        ("срок отпуска", "период отпуска"),
+    )
     return {
         "student_name": _name(rows, blob) or MISSING,
-        "group": _group(blob) or MISSING,
-        "course": _course(blob) or MISSING,
-        "leave_reason": _reason(blob) or MISSING,
+        "group": _group(rows, blob) or MISSING,
+        "course": _course(rows, blob) or MISSING,
+        "leave_reason": _reason(rows, blob) or MISSING,
         "leave_start": start or MISSING,
         "leave_end": end or MISSING,
-        "application_date": _application_date(rows, start, end) or MISSING,
+        "application_date": _date_by_label(rows, ("дата заявления",)) or MISSING,
         "signature_present": signed,
     }
 
 
 def _practice(rows: list[str], blob: str, signed: bool, sealed: bool) -> dict:
-    start, end = _period(rows, ("практик", "срок", "период"))
-    number, issued = _number_and_issue(rows, blob)
+    start, end = _span(
+        rows,
+        ("дата начала практики", "начало практики", "дата начала"),
+        ("дата окончания практики", "окончание практики", "дата окончания"),
+        ("срок практики", "период практики"),
+    )
     return {
         "student_name": _name(rows, blob) or MISSING,
-        "organization": _labeled(rows, r"организац\w*|предприят\w*|учрежден\w*") or MISSING,
+        "organization": _labeled(rows, ("название организации", "организация")) or MISSING,
         "internship_start": start or MISSING,
         "internship_end": end or MISSING,
-        "supervisor_name": _labeled(rows, r"руководител\w*(?:\s+практик\w*)?") or MISSING,
-        "grade": _grade(blob) or MISSING,
-        "document_number": number or MISSING,
-        "issue_date": issued or MISSING,
+        "supervisor_name": _person(rows, ("фио руководителя практики", "руководитель практики", "руководитель")) or MISSING,
+        "grade": _grade(rows) or MISSING,
+        "document_number": _document_number(rows, "practice") or MISSING,
+        "issue_date": _issue_date(rows) or MISSING,
         "signature_present": signed,
         "seal_present": sealed,
     }
 
 
+def _split_label(row: str) -> tuple[str, str] | None:
+    low = row.lower().strip()
+    for label in _LABELS:
+        if not low.startswith(label):
+            continue
+        rest = row.strip()[len(label):]
+        if rest[:1] not in ("", " ", ":", "-", "–", "—", "."):
+            continue
+        return label, rest.lstrip(" \t:.-–—").strip()
+    if ":" not in row:
+        return None
+    head, _, tail = row.partition(":")
+    # «Период: дата - дата» — это пара, а не опечатка в метке начала или конца.
+    if len(parse_dates(tail)) >= 2:
+        return None
+    fuzzy = closest_label(head, _LABELS)
+    if fuzzy is None:
+        return None
+    return fuzzy, tail.strip()
+
+
+def _labeled(rows: list[str], labels: tuple[str, ...], accept=None) -> str | None:
+    """Хвост своей метки. Следующую строку берём, только если это не другая метка."""
+    if accept is None:
+        accept = _plain
+    wanted = set(labels)
+    for index, row in enumerate(rows):
+        split = _split_label(row)
+        if split is None or split[0] not in wanted:
+            continue
+        tail = split[1]
+        if not tail and index + 1 < len(rows) and _split_label(rows[index + 1]) is None:
+            tail = rows[index + 1].strip()
+        if not tail or _split_label(tail) is not None:
+            continue
+        cleaned = accept(tail)
+        if cleaned:
+            return cleaned
+    return None
+
+
+def _plain(tail: str) -> str | None:
+    text = tail.strip(" .")
+    if not text or _split_label(text) is not None:
+        return None
+    return text
+
+
 def _name(rows: list[str], blob: str) -> str | None:
-    labeled = _labeled(rows, r"фио|фамилия(?:\s*,\s*имя(?:\s*,\s*отчество)?)?")
+    # Подпись «ФИО» уже в именительном. Склоняем только «Выдана Иванову…».
+    labeled = _person(rows, ("фио студента", "фамилия"))
     if labeled:
-        found = re.search(NAME, labeled)
-        if found:
-            return _nominative_phrase(found.group(0))
-    # Регистр в шаблоне имени важен: «студент группы» — это не ФИО.
+        return labeled
+    for index, row in enumerate(rows):
+        split = _split_label(row)
+        if split is None or split[0] != "фио":
+            continue
+        tail = split[1]
+        if not tail and index + 1 < len(rows) and _split_label(rows[index + 1]) is None:
+            tail = rows[index + 1].strip()
+        person = _person_in(tail or "")
+        if person:
+            return person
     for pattern in (
         rf"(?:^|\n)\s*[Яя]\s*,\s*({NAME})",
         rf"(?:[Вв]ыдан[аоы]?|[Сс]тудент[уа]?)\s+({NAME})",
@@ -118,6 +234,15 @@ def _name(rows: list[str], blob: str) -> str | None:
         if found:
             return _nominative_phrase(found.group(1))
     return None
+
+
+def _person(rows: list[str], labels: tuple[str, ...]) -> str | None:
+    return _labeled(rows, labels, accept=_person_in)
+
+
+def _person_in(tail: str) -> str | None:
+    found = re.search(NAME, tail)
+    return found.group(0) if found else None
 
 
 def _nominative_phrase(phrase: str) -> str:
@@ -149,9 +274,14 @@ def _nominative(word: str) -> str:
     return word
 
 
-def _university(blob: str) -> str | None:
+def _university(rows: list[str], blob: str) -> str | None:
+    labeled = _labeled(rows, ("название вуза", "вуз"))
+    if labeled:
+        return labeled
     stop = {"в", "во", "на", "и", "что", "он", "она", "они", "обучался", "обучалась", "обучается"}
     for row in blob.split("\n"):
+        if _split_label(row) is not None:
+            continue
         found = re.search(r"(?:университет|институт|академи)\w*", row, flags=re.IGNORECASE)
         if not found:
             continue
@@ -170,179 +300,140 @@ def _university(blob: str) -> str | None:
     return None
 
 
-def _form(blob: str) -> str | None:
-    found = re.search(r"очно-заочн\w*|заочн\w*|очн\w*", blob, flags=re.IGNORECASE)
-    if not found:
-        return None
-    word = found.group(0).lower()
-    if word.startswith("очно-заоч"):
-        return "очно-заочная"
-    if word.startswith("заоч"):
-        return "заочная"
-    return "очная"
-
-
-def _group(blob: str) -> str | None:
-    found = re.search(r"\b[А-ЯЁA-Z]{1,6}-\d{2}(?:-\d{1,2})?\b", blob)
-    return found.group(0) if found else None
-
-
-def _course(blob: str) -> str | None:
-    found = re.search(r"(\d)\s*курс|курс\s*[:№]?\s*(\d)", blob, flags=re.IGNORECASE)
-    if not found:
-        return None
-    return found.group(1) or found.group(2)
-
-
-def _reason(blob: str) -> str | None:
-    low = blob.lower().replace("ё", "е")
-    for phrase in REASONS:
-        if phrase.replace("ё", "е") in low:
-            return phrase.replace("ё", "е")
-    labeled = re.search(r"причин\w*\s*[:\-–]?\s*(.+)", blob, flags=re.IGNORECASE)
+def _form(rows: list[str], blob: str) -> str | None:
+    labeled = _labeled(rows, ("форма обучения",), accept=lambda tail: closed_or_raw(tail, FORMS))
     if labeled:
-        return labeled.group(1).split("\n")[0].strip(" .")
+        return labeled
+    return snap(blob, FORMS)
+
+
+def _group(rows: list[str], blob: str) -> str | None:
+    labeled = _labeled(rows, ("учебная группа", "группа"), accept=_group_in)
+    if labeled:
+        return labeled
+    return _group_in(blob)
+
+
+def _group_in(text: str) -> str | None:
+    found = GROUP.search(text)
+    return found.group(1) if found else None
+
+
+def _course(rows: list[str], blob: str) -> str | None:
+    labeled = _labeled(rows, ("курс",), accept=_course_in)
+    if labeled:
+        return labeled
+    for row in blob.split("\n"):
+        found = re.search(r"(?<!\d)([1-4])[ \t]*курс", row, flags=re.IGNORECASE)
+        if found:
+            return found.group(1)
     return None
 
 
-def _grade(blob: str) -> str | None:
-    low = blob.lower()
-    for grade in GRADES:
-        if grade in low:
-            return grade
-    return None
+def _course_in(text: str) -> str | None:
+    found = re.fullmatch(r"([1-4])(?:[ \t]*курс)?", text.strip(), flags=re.IGNORECASE)
+    return found.group(1) if found else None
 
 
-def _labeled(rows: list[str], label: str) -> str | None:
-    pattern = re.compile(rf"(?:{label})\s*[:\-–]?\s*(.*)$", flags=re.IGNORECASE)
-    for index, row in enumerate(rows):
-        found = pattern.search(row)
+def _reason(rows: list[str], blob: str) -> str | None:
+    labeled = _labeled(rows, ("причина отпуска", "причина"), accept=_reason_tail)
+    if labeled:
+        return labeled
+    return snap(blob, REASONS)
+
+
+def _reason_tail(text: str) -> str | None:
+    hit = snap(text, REASONS)
+    if hit:
+        return hit
+    cleaned = text.strip(" .")
+    if not cleaned or _split_label(cleaned) is not None:
+        return None
+    return cleaned
+
+
+def _grade(rows: list[str]) -> str | None:
+    return _labeled(rows, ("оценка",), accept=lambda tail: closed_or_raw(tail, GRADES))
+
+
+def _document_number(rows: list[str], kind: str) -> str | None:
+    for row in rows:
+        split = _split_label(row)
+        on_number_line = split is not None and split[0] in {"номер справки", "номер документа", "номер"}
+        if not on_number_line and not re.search(r"номер|№", row, flags=re.IGNORECASE):
+            continue
+        found = NUMBER.search(fix_digits(row))
         if not found:
             continue
-        tail = found.group(1).strip(" .:-–")
-        if tail:
-            return tail
-        if index + 1 < len(rows):
-            return rows[index + 1].strip()
+        value = number_for(found.group(1), found.group(2), kind)
+        if value:
+            return value
     return None
 
 
-def _period(rows: list[str], hints: tuple[str, ...]) -> tuple[str | None, str | None]:
+def _issue_date(rows: list[str]) -> str | None:
+    labeled = _date_by_label(rows, ("дата выдачи",))
+    if labeled:
+        return labeled
     for row in rows:
-        low = row.lower()
-        if any(hint in low for hint in hints):
-            dates = _iso_dates(row)
-            if len(dates) >= 2:
-                return dates[0], dates[1]
-    dates = _iso_dates("\n".join(rows))
-    if len(dates) >= 2:
-        return dates[0], dates[1]
-    return None, None
-
-
-def _number_and_issue(rows: list[str], blob: str) -> tuple[str | None, str | None]:
-    number = None
-    issued = None
-    for row in rows:
-        found = re.search(
-            r"(?:номер\w*|№)\s*(?:справки|документа|практики)?\s*[:№]?\s*([0-9A-Za-zА-Яа-яЁё][\w\-/]{0,24})",
+        if not re.search(r"номер|№", row, flags=re.IGNORECASE):
+            continue
+        after = re.search(
+            r"\bот\s+(\d{1,2}[./]\d{1,2}[./]\d{4}|\d{1,2}\s+[А-Яа-яЁё]+\s+\d{4})",
             row,
             flags=re.IGNORECASE,
         )
-        if found and number is None:
-            number = found.group(1)
-        after_ot = re.search(r"\bот\s+(\d{1,2}[./]\d{1,2}[./]\d{4}|\d{1,2}\s+[А-Яа-яЁё]+\s+\d{4})", row, flags=re.IGNORECASE)
-        if after_ot and issued is None:
-            parsed = _iso_dates(after_ot.group(1))
-            if parsed:
-                issued = parsed[0]
-        labeled = re.search(r"дата\s+(?:выдачи|справки)\s*[:\-–]?\s*(.+)", row, flags=re.IGNORECASE)
-        if labeled and issued is None:
-            parsed = _iso_dates(labeled.group(1))
-            if parsed:
-                issued = parsed[0]
-    if issued is None:
-        labeled = re.search(r"дата\s+(?:выдачи|справки)\s*[:\-–]?\s*(.+)", blob, flags=re.IGNORECASE)
-        if labeled:
-            parsed = _iso_dates(labeled.group(1))
-            if parsed:
-                issued = parsed[0]
-    return number, issued
+        if not after:
+            continue
+        parsed = _iso_dates(after.group(1))
+        if parsed:
+            return parsed[0]
+    return None
 
 
-def _application_date(rows: list[str], start: str | None, end: str | None) -> str | None:
-    for row in rows:
-        if re.search(r"дата\s+заявлен", row, flags=re.IGNORECASE):
-            parsed = _iso_dates(row)
+def _span(
+    rows: list[str],
+    start_labels: tuple[str, ...],
+    end_labels: tuple[str, ...],
+    pair_hints: tuple[str, ...],
+) -> tuple[str | None, str | None]:
+    start = _date_by_label(rows, start_labels)
+    end = _date_by_label(rows, end_labels)
+    if start and end:
+        return ordered_span(start, end)
+    pair_start, pair_end = _pair(rows, pair_hints)
+    return ordered_span(start or pair_start, end or pair_end)
+
+
+def _date_by_label(rows: list[str], labels: tuple[str, ...]) -> str | None:
+    for label in labels:
+        for index, row in enumerate(rows):
+            split = _split_label(row)
+            if split is None or split[0] != label:
+                continue
+            tail = split[1]
+            if not tail and index + 1 < len(rows) and _split_label(rows[index + 1]) is None:
+                tail = rows[index + 1].strip()
+            if re.search(r"\d", tail or "") and not _iso_dates(tail or ""):
+                return None
+            parsed = _iso_dates(tail or "")
             if parsed:
-                return parsed[0]
-    for row in rows:
-        parsed = _iso_dates(row)
-        if len(parsed) == 1 and parsed[0] not in {start, end}:
-            if not re.search(r"отпуск|период|практик|обучен", row, flags=re.IGNORECASE):
                 return parsed[0]
     return None
 
 
+def _pair(rows: list[str], hints: tuple[str, ...]) -> tuple[str | None, str | None]:
+    """Вторая ступень: две даты на одной строке периода, не по порядку листа."""
+    for row in rows:
+        low = row.lower()
+        hinted = any(hint in low for hint in hints) or re.search(r"\bс\b.+\bпо\b", low)
+        if not hinted:
+            continue
+        dates = _iso_dates(row)
+        if len(dates) >= 2:
+            return dates[0], dates[1]
+    return None, None
+
+
 def _iso_dates(text: str) -> list[str]:
-    found = []
-    numeric = re.compile(r"\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b")
-    iso = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
-    words = re.compile(
-        r"\b(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})",
-        flags=re.IGNORECASE,
-    )
-    for match in numeric.finditer(text):
-        day, month, year = (int(part) for part in match.groups())
-        if 1 <= day <= 31 and 1 <= month <= 12:
-            found.append((match.start(), f"{year:04d}-{month:02d}-{day:02d}"))
-    for match in iso.finditer(text):
-        year, month, day = (int(part) for part in match.groups())
-        if 1 <= day <= 31 and 1 <= month <= 12:
-            found.append((match.start(), f"{year:04d}-{month:02d}-{day:02d}"))
-    for match in words.finditer(text):
-        day = int(match.group(1))
-        month = MONTHS[match.group(2).lower()]
-        year = int(match.group(3))
-        if 1 <= day <= 31:
-            found.append((match.start(), f"{year:04d}-{month:02d}-{day:02d}"))
-    found.sort(key=lambda item: item[0])
-    ordered = []
-    for _, value in found:
-        if value not in ordered:
-            ordered.append(value)
-    return ordered
-
-
-def _marks(images: list, pages: list[dict]) -> tuple[bool, bool]:
-    signed = False
-    sealed = False
-    for image, page in zip(images, pages):
-        page_signed, page_sealed = _page_marks(image, page.get("lines", []))
-        signed = signed or page_signed
-        sealed = sealed or page_sealed
-    return signed, sealed
-
-
-def _page_marks(image, lines: list[dict]) -> tuple[bool, bool]:
-    rgb = np.asarray(image.convert("RGB"))
-    height, width = rgb.shape[:2]
-    red = rgb[:, :, 0].astype(np.int16)
-    green = rgb[:, :, 1].astype(np.int16)
-    blue = rgb[:, :, 2].astype(np.int16)
-    stamp = ((red > 140) & (red > green + 35) & (red > blue + 35)) | (
-        (blue > 140) & (blue > red + 30) & (blue > green + 15)
-    )
-    covered = np.zeros((height, width), dtype=bool)
-    for line in lines:
-        x, y, box_w, box_h = (int(v) for v in line["bbox"])
-        x1 = max(0, x - 4)
-        y1 = max(0, y - 4)
-        x2 = min(width, x + box_w + 4)
-        y2 = min(height, y + box_h + 4)
-        covered[y1:y2, x1:x2] = True
-    dark = rgb.mean(axis=2) < 60
-    bottom = np.zeros((height, width), dtype=bool)
-    bottom[int(height * 0.55):, :] = True
-    signature = int((dark & bottom & ~covered).sum()) > 120
-    return signature, int(stamp.sum()) > 250
+    return parse_dates(text)

@@ -52,6 +52,8 @@ __all__ = ["OcrError", "run_ocr", "save_result"]
 def run_ocr(path: str | Path) -> dict:
     from backend.ocr import engine
 
+    from backend.ocr.handwriting import MODEL_ID, enabled, reread
+
     path = Path(path)
     started = time.perf_counter()
     fmt, pages = load_document(path)
@@ -62,10 +64,9 @@ def run_ocr(path: str | Path) -> dict:
     for page in pages:
         prepared = prepare(page.image)
         raw_lines, turns = engine.recognize(prepared.image)
-        from backend.ocr.handwriting import reread
-
-        raw_lines = reread(prepared.image, raw_lines)
-        lines = [_to_page_coords(l, prepared.scale, page.image.size) for l in raw_lines]
+        if enabled():
+            raw_lines = reread(prepared.image, raw_lines)
+        lines = [_to_page_coords(l, prepared, page.image.size) for l in raw_lines]
         text = page_text(lines)
         if not text:
             warnings.append(f"Текст не найден на странице {page.index + 1}")
@@ -86,7 +87,7 @@ def run_ocr(path: str | Path) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "source": {"file": path.name, "format": fmt, "pages": len(pages)},
-        "engine": {**engine.engine_info(), "handwriting": "kazars24/trocr-base-handwritten-ru"},
+        "engine": {**engine.engine_info(), "handwriting": MODEL_ID if enabled() else "выключен"},
         "text": full_text,
         "pages": out_pages,
         "warnings": warnings,
@@ -97,14 +98,15 @@ def run_ocr(path: str | Path) -> dict:
     }
 
 
-def _to_page_coords(line: dict, scale: float, size: tuple[int, int]) -> dict:
+def _to_page_coords(line: dict, prepared, size: tuple[int, int]) -> dict:
     from backend.ocr.engine import MIN_CONFIDENCE
+    from backend.ocr.preprocess import map_to_page
 
     width, height = size
-    polygon = [
-        [round(min(max(x / scale, 0), width - 1), 1), round(min(max(y / scale, 0), height - 1), 1)]
-        for x, y in line["polygon"]
-    ]
+    polygon = []
+    for x, y in line["polygon"]:
+        px, py = map_to_page(x, y, prepared)
+        polygon.append([round(min(max(px, 0), width - 1), 1), round(min(max(py, 0), height - 1), 1)])
     xs = [p[0] for p in polygon]
     ys = [p[1] for p in polygon]
     left, top = int(min(xs)), int(min(ys))
