@@ -6,35 +6,33 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Александров Артём Игоревич",
-        "university": "Учебный университет «Меридиан»",
+        "university": "Название вуза: Учебный университет «Меридиан»",
         "program": "38.03.01 Экономика",
         "study_form": "очная",
         "study_start": "2023-09-01",
         "study_end": "2026-08-31",
         "document_number": "ОБ-1001",
         "issue_date": "2026-09-01",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
-        "status": "document_ok",
-        "missing_fields": [],
+        "status": "missing_fields",
+        "missing_fields": [
+          "signature_present"
+        ],
         "sources": [
-          "rule:3.1",
-          "rule:3.2",
-          "rule:3.3"
+          "rule:3.2"
         ]
       },
       "answers": [
         {
           "question_id": "open-001-Q1",
           "answerable": true,
-          "value": "document_ok",
-          "answer": "Документ содержит все обязательные сведения по пунктам 3.1, 3.2, 3.3 Положения. Окончательное решение примет сотрудник деканата.",
+          "value": "missing_fields",
+          "answer": "Не хватает следующих сведений: подпись сотрудника. Основание: пункты 3.2 Положения.",
           "sources": [
-            "rule:3.1",
-            "rule:3.2",
-            "rule:3.3"
+            "rule:3.2"
           ]
         },
         {
@@ -69,23 +67,25 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Мельников Денис Игоревич",
-        "university": "Учебная академия «Горизонт»",
+        "university": "Название вуза: Учебная академия «Горизонт»",
         "program": "09.03.01 Информатика и вычислительная техника",
         "study_form": "очно-заочная",
         "study_start": "2022-09-01",
         "study_end": "2026-08-31",
         "document_number": "ОБ-1002",
         "issue_date": "не найдено",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "issue_date"
+          "issue_date",
+          "signature_present"
         ],
         "sources": [
-          "rule:3.1"
+          "rule:3.1",
+          "rule:3.2"
         ]
       },
       "answers": [
@@ -93,9 +93,10 @@
           "question_id": "open-002-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: дата выдачи. Основание: пункты 3.1 Положения.",
+          "answer": "Не хватает следующих сведений: дата выдачи, подпись сотрудника. Основание: пункты 3.1, 3.2 Положения.",
           "sources": [
-            "rule:3.1"
+            "rule:3.1",
+            "rule:3.2"
           ]
         },
         {
@@ -128,7 +129,7 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Жуков Андрей Дмитриевич",
-        "university": "Учебная академия «Горизонт»",
+        "university": "Название вуза: Учебная академия «Горизонт»",
         "program": "38.03.01 Экономика",
         "study_form": "очно-заочная",
         "study_start": "2022-09-01",
@@ -189,23 +190,23 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Климов Борис Дмитриевич",
-        "university": "Учебный университет «Меридиан»",
+        "university": "Название вуза: Учебный университет «Меридиан»",
         "program": "09.03.01 Информатика и вычислительная техника",
         "study_form": "очно-заочная",
         "study_start": "2023-09-01",
         "study_end": "2026-08-31",
         "document_number": "ОБ-1004",
         "issue_date": "2026-09-20",
-        "signature_present": true,
-        "seal_present": false
+        "signature_present": false,
+        "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "seal_present"
+          "signature_present"
         ],
         "sources": [
-          "rule:3.3"
+          "rule:3.2"
         ]
       },
       "answers": [
@@ -213,9 +214,9 @@
           "question_id": "open-004-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: печать вуза. Основание: пункты 3.3 Положения.",
+          "answer": "Не хватает следующих сведений: подпись сотрудника. Основание: пункты 3.2 Положения.",
           "sources": [
-            "rule:3.3"
+            "rule:3.2"
           ]
         },
         {
@@ -250,24 +251,25 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "не найдено",
-        "university": "Учебная академия «Горизонт»",
+        "university": "Название вуза: Учебная академия «Горизонт»",
         "program": "09.03.01 Информатика и вычислительная техника",
         "study_form": "очная",
         "study_start": "2022-09-01",
         "study_end": "2026-08-31",
-        "document_number": "не найдено",
+        "document_number": "справки",
         "issue_date": "2026-09-12",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
           "student_name",
-          "document_number"
+          "signature_present"
         ],
         "sources": [
-          "rule:3.1"
+          "rule:3.1",
+          "rule:3.2"
         ]
       },
       "answers": [
@@ -275,9 +277,10 @@
           "question_id": "open-005-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: фио студента, номер справки. Основание: пункты 3.1 Положения.",
+          "answer": "Не хватает следующих сведений: фио студента, подпись сотрудника. Основание: пункты 3.1, 3.2 Положения.",
           "sources": [
-            "rule:3.1"
+            "rule:3.1",
+            "rule:3.2"
           ]
         },
         {
@@ -313,21 +316,22 @@
         "university": "не найдено",
         "program": "38.03.01 Экономика",
         "study_form": "заочная",
-        "study_start": "не найдено",
-        "study_end": "2026-08-31",
+        "study_start": "2026-08-31",
+        "study_end": "2026-09-20",
         "document_number": "ОБ-1006",
         "issue_date": "2026-09-20",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
           "university",
-          "study_start"
+          "signature_present"
         ],
         "sources": [
-          "rule:3.1"
+          "rule:3.1",
+          "rule:3.2"
         ]
       },
       "answers": [
@@ -335,9 +339,10 @@
           "question_id": "open-006-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: название вуза, начало периода обучения. Основание: пункты 3.1 Положения.",
+          "answer": "Не хватает следующих сведений: название вуза, подпись сотрудника. Основание: пункты 3.1, 3.2 Положения.",
           "sources": [
-            "rule:3.1"
+            "rule:3.1",
+            "rule:3.2"
           ]
         },
         {
@@ -370,24 +375,25 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Орлов Максим Сергеевич",
-        "university": "Учебный университет «Меридиан»",
-        "program": "не найдено",
+        "university": "Название вуза: Учебный университет «Меридиан»",
+        "program": "Форма обучения:",
         "study_form": "не найдено",
         "study_start": "2024-09-01",
         "study_end": "2026-08-31",
         "document_number": "ОБ-1007",
         "issue_date": "2026-09-20",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "program",
-          "study_form"
+          "study_form",
+          "signature_present"
         ],
         "sources": [
-          "rule:3.1"
+          "rule:3.1",
+          "rule:3.2"
         ]
       },
       "answers": [
@@ -395,17 +401,20 @@
           "question_id": "open-007-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: направление подготовки, форма обучения. Основание: пункты 3.1 Положения.",
+          "answer": "Не хватает следующих сведений: форма обучения, подпись сотрудника. Основание: пункты 3.1, 3.2 Положения.",
           "sources": [
-            "rule:3.1"
+            "rule:3.1",
+            "rule:3.2"
           ]
         },
         {
           "question_id": "open-007-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Направление подготовки» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "Форма обучения:",
+          "answer": "Направление подготовки: Форма обучения:.",
+          "sources": [
+            "field:program"
+          ]
         },
         {
           "question_id": "open-007-Q3",
@@ -430,35 +439,33 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Крылов Артём Викторович",
-        "university": "Учебный университет «Меридиан»",
+        "university": "Название вуза: Учебный университет «Меридиан»",
         "program": "42.03.02 Журналистика",
         "study_form": "очная",
         "study_start": "2023-09-01",
         "study_end": "2026-08-31",
         "document_number": "ОБ-1008",
         "issue_date": "2026-09-14",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
-        "status": "document_ok",
-        "missing_fields": [],
+        "status": "missing_fields",
+        "missing_fields": [
+          "signature_present"
+        ],
         "sources": [
-          "rule:3.1",
-          "rule:3.2",
-          "rule:3.3"
+          "rule:3.2"
         ]
       },
       "answers": [
         {
           "question_id": "open-008-Q1",
           "answerable": true,
-          "value": "document_ok",
-          "answer": "Документ содержит все обязательные сведения по пунктам 3.1, 3.2, 3.3 Положения. Окончательное решение примет сотрудник деканата.",
+          "value": "missing_fields",
+          "answer": "Не хватает следующих сведений: подпись сотрудника. Основание: пункты 3.2 Положения.",
           "sources": [
-            "rule:3.1",
-            "rule:3.2",
-            "rule:3.3"
+            "rule:3.2"
           ]
         },
         {
@@ -493,23 +500,23 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Морозов Артём Дмитриевич",
-        "university": "Учебная академия «Горизонт»",
+        "university": "Название вуза: Учебная академия «Горизонт»",
         "program": "38.03.01 Экономика",
         "study_form": "очно-заочная",
         "study_start": "2022-09-01",
-        "study_end": "не найдено",
+        "study_end": "2026-09-21",
         "document_number": "ОБ-1009",
         "issue_date": "2026-09-21",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "study_end"
+          "signature_present"
         ],
         "sources": [
-          "rule:3.1"
+          "rule:3.2"
         ]
       },
       "answers": [
@@ -517,17 +524,19 @@
           "question_id": "open-009-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: окончание периода обучения. Основание: пункты 3.1 Положения.",
+          "answer": "Не хватает следующих сведений: подпись сотрудника. Основание: пункты 3.2 Положения.",
           "sources": [
-            "rule:3.1"
+            "rule:3.2"
           ]
         },
         {
           "question_id": "open-009-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Окончание периода обучения» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "2026-09-21",
+          "answer": "Окончание периода обучения: 2026-09-21.",
+          "sources": [
+            "field:study_end"
+          ]
         },
         {
           "question_id": "open-009-Q3",
@@ -552,7 +561,7 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Петров Андрей Николаевич",
-        "university": "Учебный институт «Вектор»",
+        "university": "Название вуза: Учебный институт «Вектор»",
         "program": "42.03.02 Журналистика",
         "study_form": "очно-заочная",
         "study_start": "2023-09-01",
@@ -587,8 +596,8 @@
         {
           "question_id": "open-010-Q2",
           "answerable": true,
-          "value": "Учебный институт «Вектор»",
-          "answer": "Название вуза: Учебный институт «Вектор».",
+          "value": "Название вуза: Учебный институт «Вектор»",
+          "answer": "Название вуза: Название вуза: Учебный институт «Вектор».",
           "sources": [
             "field:university"
           ]
@@ -617,16 +626,19 @@
       "fields": {
         "student_name": "Соколов Олег Николаевич",
         "group": "ЖР-25-1",
-        "course": "3",
+        "course": "не найдено",
         "leave_reason": "по состоянию здоровья",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "2026-10-07",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
-        "status": "document_ok",
-        "missing_fields": [],
+        "status": "missing_fields",
+        "missing_fields": [
+          "course",
+          "signature_present"
+        ],
         "sources": [
           "rule:4.1",
           "rule:4.2"
@@ -636,8 +648,8 @@
         {
           "question_id": "open-011-Q1",
           "answerable": true,
-          "value": "document_ok",
-          "answer": "Документ содержит все обязательные сведения по пунктам 4.1, 4.2 Положения. Окончательное решение примет сотрудник деканата.",
+          "value": "missing_fields",
+          "answer": "Не хватает следующих сведений: курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
             "rule:4.1",
             "rule:4.2"
@@ -676,20 +688,23 @@
       "fields": {
         "student_name": "Захаров Фёдор Дмитриевич",
         "group": "ЖР-23-3",
-        "course": "3",
+        "course": "не найдено",
         "leave_reason": "по состоянию здоровья",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "не найдено",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "application_date"
+          "course",
+          "application_date",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -697,9 +712,10 @@
           "question_id": "open-012-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: дата заявления. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: курс, дата заявления, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
@@ -733,7 +749,7 @@
       "fields": {
         "student_name": "Павлов Фёдор Дмитриевич",
         "group": "ЭК-24-2",
-        "course": "4",
+        "course": "не найдено",
         "leave_reason": "по семейным обстоятельствам",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
@@ -743,9 +759,11 @@
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
+          "course",
           "signature_present"
         ],
         "sources": [
+          "rule:4.1",
           "rule:4.2"
         ]
       },
@@ -754,8 +772,9 @@
           "question_id": "open-013-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: подпись студента. Основание: пункты 4.2 Положения.",
+          "answer": "Не хватает следующих сведений: курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
+            "rule:4.1",
             "rule:4.2"
           ]
         },
@@ -792,20 +811,22 @@
       "fields": {
         "student_name": "Орлов Фёдор Викторович",
         "group": "ЖР-22-3",
-        "course": "2",
-        "leave_reason": "не найдено",
+        "course": "не найдено",
+        "leave_reason": "отпуска:",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "2026-10-09",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "leave_reason"
+          "course",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -813,17 +834,20 @@
           "question_id": "open-014-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: причина отпуска. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
           "question_id": "open-014-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Причина отпуска» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "отпуска:",
+          "answer": "Причина отпуска: отпуска:.",
+          "sources": [
+            "field:leave_reason"
+          ]
         },
         {
           "question_id": "open-014-Q3",
@@ -849,20 +873,23 @@
       "fields": {
         "student_name": "не найдено",
         "group": "ИВТ-23-4",
-        "course": "4",
-        "leave_reason": "в связи с уходом за родственником",
+        "course": "не найдено",
+        "leave_reason": "отпуска: в связи с уходом за родственником",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "2026-10-06",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "student_name"
+          "student_name",
+          "course",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -870,9 +897,10 @@
           "question_id": "open-015-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: фио студента. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: фио студента, курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
@@ -911,16 +939,18 @@
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "2026-10-05",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
           "group",
-          "course"
+          "course",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -928,9 +958,10 @@
           "question_id": "open-016-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: учебная группа, курс. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: учебная группа, курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
@@ -964,20 +995,22 @@
       "fields": {
         "student_name": "Захаров Юрий Николаевич",
         "group": "ЖР-21-2",
-        "course": "1",
+        "course": "не найдено",
         "leave_reason": "по состоянию здоровья",
-        "leave_start": "не найдено",
-        "leave_end": "2027-08-31",
+        "leave_start": "2027-08-31",
+        "leave_end": "2026-10-08",
         "application_date": "2026-10-08",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "leave_start"
+          "course",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -985,17 +1018,20 @@
           "question_id": "open-017-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: дата начала отпуска. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
           "question_id": "open-017-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Дата начала отпуска» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "2027-08-31",
+          "answer": "Дата начала отпуска: 2027-08-31.",
+          "sources": [
+            "field:leave_start"
+          ]
         },
         {
           "question_id": "open-017-Q3",
@@ -1021,16 +1057,19 @@
       "fields": {
         "student_name": "Захаров Роман Дмитриевич",
         "group": "ИВТ-22-3",
-        "course": "3",
+        "course": "не найдено",
         "leave_reason": "по семейным обстоятельствам",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "2026-10-03",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
-        "status": "document_ok",
-        "missing_fields": [],
+        "status": "missing_fields",
+        "missing_fields": [
+          "course",
+          "signature_present"
+        ],
         "sources": [
           "rule:4.1",
           "rule:4.2"
@@ -1040,8 +1079,8 @@
         {
           "question_id": "open-018-Q1",
           "answerable": true,
-          "value": "document_ok",
-          "answer": "Документ содержит все обязательные сведения по пунктам 4.1, 4.2 Положения. Окончательное решение примет сотрудник деканата.",
+          "value": "missing_fields",
+          "answer": "Не хватает следующих сведений: курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
             "rule:4.1",
             "rule:4.2"
@@ -1080,20 +1119,22 @@
       "fields": {
         "student_name": "Романов Илья Андреевич",
         "group": "ЖР-23-4",
-        "course": "2",
+        "course": "не найдено",
         "leave_reason": "по состоянию здоровья",
         "leave_start": "2026-11-01",
-        "leave_end": "не найдено",
+        "leave_end": "2026-10-02",
         "application_date": "2026-10-02",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "leave_end"
+          "course",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -1101,17 +1142,20 @@
           "question_id": "open-019-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: дата окончания отпуска. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: курс, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
           "question_id": "open-019-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Дата окончания отпуска» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "2026-10-02",
+          "answer": "Дата окончания отпуска: 2026-10-02.",
+          "sources": [
+            "field:leave_end"
+          ]
         },
         {
           "question_id": "open-019-Q3",
@@ -1137,21 +1181,24 @@
       "fields": {
         "student_name": "Захаров Виктор Михайлович",
         "group": "не найдено",
-        "course": "2",
+        "course": "не найдено",
         "leave_reason": "по семейным обстоятельствам",
         "leave_start": "2026-11-01",
         "leave_end": "2027-08-31",
         "application_date": "не найдено",
-        "signature_present": true
+        "signature_present": false
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
           "group",
-          "application_date"
+          "course",
+          "application_date",
+          "signature_present"
         ],
         "sources": [
-          "rule:4.1"
+          "rule:4.1",
+          "rule:4.2"
         ]
       },
       "answers": [
@@ -1159,9 +1206,10 @@
           "question_id": "open-020-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: учебная группа, дата заявления. Основание: пункты 4.1 Положения.",
+          "answer": "Не хватает следующих сведений: учебная группа, курс, дата заявления, подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
-            "rule:4.1"
+            "rule:4.1",
+            "rule:4.2"
           ]
         },
         {
@@ -1201,28 +1249,26 @@
         "grade": "удовлетворительно",
         "document_number": "ПР-2021",
         "issue_date": "2026-07-18",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
-        "status": "document_ok",
-        "missing_fields": [],
+        "status": "missing_fields",
+        "missing_fields": [
+          "signature_present"
+        ],
         "sources": [
-          "rule:5.1",
-          "rule:5.2",
-          "rule:5.3"
+          "rule:5.2"
         ]
       },
       "answers": [
         {
           "question_id": "open-021-Q1",
           "answerable": true,
-          "value": "document_ok",
-          "answer": "Документ содержит все обязательные сведения по пунктам 5.1, 5.2, 5.3 Положения. Окончательное решение примет сотрудник деканата.",
+          "value": "missing_fields",
+          "answer": "Не хватает следующих сведений: подпись руководителя. Основание: пункты 5.2 Положения.",
           "sources": [
-            "rule:5.1",
-            "rule:5.2",
-            "rule:5.3"
+            "rule:5.2"
           ]
         },
         {
@@ -1264,16 +1310,18 @@
         "grade": "зачтено",
         "document_number": "ПР-2022",
         "issue_date": "не найдено",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "issue_date"
+          "issue_date",
+          "signature_present"
         ],
         "sources": [
-          "rule:5.1"
+          "rule:5.1",
+          "rule:5.2"
         ]
       },
       "answers": [
@@ -1281,9 +1329,10 @@
           "question_id": "open-022-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: дата выдачи. Основание: пункты 5.1 Положения.",
+          "answer": "Не хватает следующих сведений: дата выдачи, подпись руководителя. Основание: пункты 5.1, 5.2 Положения.",
           "sources": [
-            "rule:5.1"
+            "rule:5.1",
+            "rule:5.2"
           ]
         },
         {
@@ -1384,16 +1433,16 @@
         "grade": "зачтено",
         "document_number": "ПР-2024",
         "issue_date": "2026-07-17",
-        "signature_present": true,
-        "seal_present": false
+        "signature_present": false,
+        "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "seal_present"
+          "signature_present"
         ],
         "sources": [
-          "rule:5.3"
+          "rule:5.2"
         ]
       },
       "answers": [
@@ -1401,9 +1450,9 @@
           "question_id": "open-024-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: печать организации. Основание: пункты 5.3 Положения.",
+          "answer": "Не хватает следующих сведений: подпись руководителя. Основание: пункты 5.2 Положения.",
           "sources": [
-            "rule:5.3"
+            "rule:5.2"
           ]
         },
         {
@@ -1443,19 +1492,20 @@
         "internship_end": "2026-07-15",
         "supervisor_name": "Кузнецова Мария Сергеевна",
         "grade": "удовлетворительно",
-        "document_number": "не найдено",
+        "document_number": "справки",
         "issue_date": "2026-07-16",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
           "student_name",
-          "document_number"
+          "signature_present"
         ],
         "sources": [
-          "rule:5.1"
+          "rule:5.1",
+          "rule:5.2"
         ]
       },
       "answers": [
@@ -1463,9 +1513,10 @@
           "question_id": "open-025-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: фио студента, номер справки. Основание: пункты 5.1 Положения.",
+          "answer": "Не хватает следующих сведений: фио студента, подпись руководителя. Основание: пункты 5.1, 5.2 Положения.",
           "sources": [
-            "rule:5.1"
+            "rule:5.1",
+            "rule:5.2"
           ]
         },
         {
@@ -1498,24 +1549,23 @@
       "document_type": "internship_certificate",
       "fields": {
         "student_name": "Семенов Илья Дмитриевич",
-        "organization": "не найдено",
-        "internship_start": "не найдено",
-        "internship_end": "2026-07-15",
+        "organization": "Дата начала практики:",
+        "internship_start": "2026-07-15",
+        "internship_end": "2026-07-23",
         "supervisor_name": "Соколова Анна Викторовна",
         "grade": "удовлетворительно",
         "document_number": "ПР-2026",
         "issue_date": "2026-07-23",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "organization",
-          "internship_start"
+          "signature_present"
         ],
         "sources": [
-          "rule:5.1"
+          "rule:5.2"
         ]
       },
       "answers": [
@@ -1523,17 +1573,19 @@
           "question_id": "open-026-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: название организации, дата начала практики. Основание: пункты 5.1 Положения.",
+          "answer": "Не хватает следующих сведений: подпись руководителя. Основание: пункты 5.2 Положения.",
           "sources": [
-            "rule:5.1"
+            "rule:5.2"
           ]
         },
         {
           "question_id": "open-026-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Название организации» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "Дата начала практики:",
+          "answer": "Название организации: Дата начала практики:.",
+          "sources": [
+            "field:organization"
+          ]
         },
         {
           "question_id": "open-026-Q3",
@@ -1561,21 +1613,22 @@
         "organization": "Учебная организация «Парус»",
         "internship_start": "2026-06-01",
         "internship_end": "2026-07-15",
-        "supervisor_name": "не найдено",
+        "supervisor_name": "Оценка:",
         "grade": "не найдено",
         "document_number": "ПР-2027",
         "issue_date": "2026-07-25",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "supervisor_name",
-          "grade"
+          "grade",
+          "signature_present"
         ],
         "sources": [
-          "rule:5.1"
+          "rule:5.1",
+          "rule:5.2"
         ]
       },
       "answers": [
@@ -1583,17 +1636,20 @@
           "question_id": "open-027-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: фио руководителя практики, оценка. Основание: пункты 5.1 Положения.",
+          "answer": "Не хватает следующих сведений: оценка, подпись руководителя. Основание: пункты 5.1, 5.2 Положения.",
           "sources": [
-            "rule:5.1"
+            "rule:5.1",
+            "rule:5.2"
           ]
         },
         {
           "question_id": "open-027-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «ФИО руководителя практики» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "Оценка:",
+          "answer": "ФИО руководителя практики: Оценка:.",
+          "sources": [
+            "field:supervisor_name"
+          ]
         },
         {
           "question_id": "open-027-Q3",
@@ -1625,28 +1681,26 @@
         "grade": "отлично",
         "document_number": "ПР-2028",
         "issue_date": "2026-07-23",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
-        "status": "document_ok",
-        "missing_fields": [],
+        "status": "missing_fields",
+        "missing_fields": [
+          "signature_present"
+        ],
         "sources": [
-          "rule:5.1",
-          "rule:5.2",
-          "rule:5.3"
+          "rule:5.2"
         ]
       },
       "answers": [
         {
           "question_id": "open-028-Q1",
           "answerable": true,
-          "value": "document_ok",
-          "answer": "Документ содержит все обязательные сведения по пунктам 5.1, 5.2, 5.3 Положения. Окончательное решение примет сотрудник деканата.",
+          "value": "missing_fields",
+          "answer": "Не хватает следующих сведений: подпись руководителя. Основание: пункты 5.2 Положения.",
           "sources": [
-            "rule:5.1",
-            "rule:5.2",
-            "rule:5.3"
+            "rule:5.2"
           ]
         },
         {
@@ -1683,21 +1737,21 @@
         "student_name": "Волков Лев Андреевич",
         "organization": "Учебная организация «Орбита»",
         "internship_start": "2026-06-01",
-        "internship_end": "не найдено",
+        "internship_end": "2026-07-23",
         "supervisor_name": "Ильина Елена Андреевна",
         "grade": "хорошо",
         "document_number": "ПР-2029",
         "issue_date": "2026-07-23",
-        "signature_present": true,
+        "signature_present": false,
         "seal_present": true
       },
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
-          "internship_end"
+          "signature_present"
         ],
         "sources": [
-          "rule:5.1"
+          "rule:5.2"
         ]
       },
       "answers": [
@@ -1705,17 +1759,19 @@
           "question_id": "open-029-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: дата окончания практики. Основание: пункты 5.1 Положения.",
+          "answer": "Не хватает следующих сведений: подпись руководителя. Основание: пункты 5.2 Положения.",
           "sources": [
-            "rule:5.1"
+            "rule:5.2"
           ]
         },
         {
           "question_id": "open-029-Q2",
-          "answerable": false,
-          "value": null,
-          "answer": "Поле «Дата окончания практики» не найдено в документе. Обратитесь в деканат.",
-          "sources": []
+          "answerable": true,
+          "value": "2026-07-23",
+          "answer": "Дата окончания практики: 2026-07-23.",
+          "sources": [
+            "field:internship_end"
+          ]
         },
         {
           "question_id": "open-029-Q3",

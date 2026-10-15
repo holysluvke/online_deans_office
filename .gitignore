@@ -223,3 +223,7 @@ __marimo__/
 # Marimo
 data/
 .DS_Store
+
+
+results_*.json
+*.meta.json
