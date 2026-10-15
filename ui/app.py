@@ -5,7 +5,7 @@ import uuid
 
 import requests
 import streamlit as st
-from style import render_header, svg
+from style import asset_uri, render_header, svg
 
 # Сколько последних задач показывать на странице (старые остаются в базе)
 MAX_SHOWN = 20
@@ -72,6 +72,14 @@ def error_detail(resp: requests.Response) -> str:
         return f"{resp.status_code} {resp.reason}"
 
 
+def fetch_jobs() -> list | None:
+    """Список задач посетителя с бэкенда; None, если сервер недоступен."""
+    try:
+        return requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
+    except (requests.RequestException, ValueError):
+        return None
+
+
 def plural(n: int, one: str, few: str, many: str) -> str:
     """Склоняет слово по числу: 1 документ, 2 документа, 5 документов."""
     if 10 < n % 100 < 15:
@@ -113,19 +121,21 @@ def how_it_works() -> None:
 with st.container(key="topbar"):
     bar_left, bar_right = st.columns([4, 1], vertical_alignment="center")
     bar_left.markdown(
-        html_line(
-            '<div class="topbar"><div class="logo">', svg("cap", 20), "</div>",
-            '<span class="brand">Онлайн-деканат</span><span class="brand-sub">Проверка документов</span></div>',
-        ),
+        '<div class="topbar"><div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14 2 2 4-4"/></svg></div>'
+        '<span class="brand-tag">Проверка документов</span></div>',
         unsafe_allow_html=True,
     )
     with bar_right:
         if st.button("Как это работает", icon=":material/help:", key="help_btn"):
             how_it_works()
 
+folder_img = asset_uri("folder.webp")
 st.markdown(
-    '<div class="page-title">Проверка документов</div>'
-    '<div class="page-sub">Загрузите справки, дождитесь проверки и узнайте, что нужно исправить в каждом документе.</div>',
+    html_line(
+        '<div class="hero"><div class="hero-text"><h1 class="hero-title">Онлайн-<br>деканат.</h1>',
+        '<p class="page-sub">Загрузите справки, дождитесь проверки и узнайте, что нужно исправить в каждом документе.</p></div>',
+        f'<div class="hero-art"><img src="{folder_img}" alt=""></div></div>' if folder_img else "</div>",
+    ),
     unsafe_allow_html=True,
 )
 
@@ -163,7 +173,7 @@ def render_stepper(n_files: int, jobs: list) -> None:
     steps = [("Загрузка документов", s1, "upload"), ("Очередь проверки", s2, "list"), ("Результаты", s3, "clipboard")]
     parts = []
     for i, (title, (state, sub, hl), icon_name) in enumerate(steps):
-        icon_html = svg("check", 18) if state == "done" else svg(icon_name, 18)
+        icon_html = svg("check", 14) if state == "done" else f"{i + 1:02d}"
         parts.append(html_line(
             f'<div class="step {state}"><div class="step-ic">{icon_html}</div><div>',
             f'<div class="step-t">{title}</div><div class="step-s {"hl" if hl else ""}">{html.escape(sub)}</div></div></div>',
@@ -189,6 +199,7 @@ def missing_issues(job: dict) -> list:
 
 # ---------- Основная часть: слева загрузка, справа очередь и результаты ----------
 col_left, col_right = st.columns([1, 1.9], gap="large")
+history = fetch_jobs()  # есть ли что очищать (кнопка «Очистить историю» неактивна, пока истории нет)
 
 with col_left:
     with st.container(key="upload_card"):
@@ -233,11 +244,10 @@ with col_left:
         def already_sent() -> set:
             """Отпечатки отправок, задачи которых ещё есть на сервере (после очистки истории или через час файл можно слать снова)."""
             sent = st.session_state.setdefault("sent", {})  # отпечаток -> номер задачи
-            try:
-                jobs = requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
-                alive = {j["job_id"] for j in jobs}
-            except (requests.RequestException, ValueError, TypeError, KeyError):
+            jobs = fetch_jobs()
+            if jobs is None:
                 return set(sent)  # нет связи с сервером: считаем, что всё отправленное там осталось
+            alive = {j["job_id"] for j in jobs}
             return {fp for fp, job_id in sent.items() if job_id in alive}
 
         def send_files(batch: dict) -> None:
@@ -290,6 +300,13 @@ with col_left:
         f'<div class="privacy">{svg("shield", 16)}<span>Фото и результаты хранятся 1 час, потом удаляются автоматически.</span></div>',
         unsafe_allow_html=True,
     )
+    # Удаляет завершённые задачи этого посетителя вместе с фото; задачи в работе остаются
+    if st.button("Очистить историю", icon=":material/delete:", key="clear_hist", disabled=not history):
+        try:
+            requests.delete(f"{API}/jobs", params={"session_id": session_id}, timeout=10)
+        except requests.RequestException:
+            st.error("Нет связи с сервером.")
+        st.rerun()  # полный перезапуск: кнопка отправки узнает, что отправленного больше нет
 
 
 def result_view(job: dict) -> None:
@@ -341,48 +358,67 @@ def result_view(job: dict) -> None:
             st.json(job["fields"])
 
 
+def toggle(flag: str) -> None:
+    """Переключает «раскрыто или свёрнуто» для блока (вызывается кнопкой, перерисовывается только очередь с результатами)."""
+    st.session_state[flag] = not st.session_state.get(flag, False)
+
+
+def toggle_button(flag: str, n: int, what: str, visible: int = 1) -> None:
+    """Кнопка «Показать все ...» или «Свернуть» под списком; нужна, только если пунктов больше, чем видно в свёрнутом виде."""
+    if n <= visible:
+        return
+    opened = st.session_state.get(flag, False)
+    st.button(
+        "Свернуть" if opened else f"Показать все {what} ({n})",
+        icon=":material/expand_less:" if opened else ":material/expand_more:",
+        key=f"{flag}_btn", on_click=toggle, args=(flag,),
+    )
+
+
 def queue_view(jobs: list) -> None:
-    """Карточка очереди: по строке на документ с именем, типом, статусом и полосой прогресса."""
-    rows = []
-    for job in reversed(jobs[-MAX_SHOWN:]):
-        status = job["status"]
-        if status == "queued":
-            stat_text = "Ждёт своей очереди"
-        elif status == "processing":
-            stat_text = ("Распознаю текст" if job["progress"] < 60 else "Готовлю ответ") + f" · {job['progress']}%"
-        elif status == "done":
-            stat_text = "Обработка завершена"
-        else:
-            stat_text = "Не удалось обработать"
-        pill_icon = svg("check", 12) if status == "done" else ""
-        err = f'<div class="qerr">{html.escape(job["error"] or "Неизвестная ошибка")}</div>' if status == "error" else ""
-        rows.append(html_line(
-            f'<div class="qrow {status}"><div class="qicon">', svg("file_check" if status == "done" else "file", 22), "</div>",
-            f'<div><div class="qname">{html.escape(job["filename"])}</div>',
-            f'<div class="qsub">{html.escape(DOC_LABELS.get(job.get("doc_type"), ""))}</div></div>',
-            f'<div class="qside"><span class="pill {status}">{pill_icon}{STATUS_PILL.get(status, status)}</span>',
-            f'<span class="qstat">{stat_text}</span></div>',
-            f'<div class="qbar"><span style="width:{job["progress"]}%"></span></div>{err}</div>',
-        ))
+    """Карточка очереди: по строке на документ; свёрнутая показывает одну строку (остальные прокручиваются)."""
+    opened = st.session_state.get("q_open", False)
     n = len(jobs)
     shown_note = f" Показаны последние {MAX_SHOWN} из {n}." if n > MAX_SHOWN else ""
-    st.markdown(
-        html_line(
-            '<div class="card"><div class="card-head"><div class="card-title">Очередь проверки</div>',
-            f'<span class="count-pill">{n} {plural(n, "документ", "документа", "документов")}</span></div>',
-            "".join(rows),
-            f'<div class="card-note">«Готово» означает, что обработка завершена. Решение по каждому документу показано в результатах ниже.{shown_note}</div></div>',
-        ),
-        unsafe_allow_html=True,
-    )
+    with st.container(key="queue_card"):
+        st.markdown(
+            html_line('<div class="card-head"><div class="card-title">Очередь проверки</div>',
+                      f'<span class="count-pill">{n} {plural(n, "документ", "документа", "документов")}</span></div>'),
+            unsafe_allow_html=True,
+        )
+        # Ключ зависит от состояния: у свёрнутого списка ограничена высота (см. style.py), у раскрытого нет
+        # В свёрнутом виде видно 1 документ, если загружен один, и 2, если загружено два и больше
+        visible = 1 if n < 2 else 2
+        with st.container(key="qlist_open" if opened else f"qlist_closed{visible}"):
+            for job in reversed(jobs[-MAX_SHOWN:]):
+                status = job["status"]
+                if status == "queued":
+                    stat_text = "Ждёт своей очереди"
+                elif status == "processing":
+                    stat_text = ("Распознаю текст" if job["progress"] < 60 else "Готовлю ответ") + f" · {job['progress']}%"
+                elif status == "done":
+                    stat_text = "Обработка завершена"
+                else:
+                    stat_text = "Не удалось обработать"
+                pill_icon = svg("check", 12) if status == "done" else ""
+                err = f'<div class="qerr">{html.escape(job["error"] or "Неизвестная ошибка")}</div>' if status == "error" else ""
+                st.markdown(html_line(
+                    f'<div class="qrow {status}"><div class="qicon">', svg("file_check" if status == "done" else "file", 22), "</div>",
+                    f'<div><div class="qname">{html.escape(job["filename"])}</div>',
+                    f'<div class="qsub">{html.escape(DOC_LABELS.get(job.get("doc_type"), ""))}</div></div>',
+                    f'<div class="qside"><span class="pill {status}">{pill_icon}{STATUS_PILL.get(status, status)}</span>',
+                    f'<span class="qstat">{stat_text}</span></div>',
+                    f'<div class="qbar"><span style="width:{job["progress"]}%"></span></div>{err}</div>',
+                ), unsafe_allow_html=True)
+        toggle_button("q_open", n, "документы", visible)
+        st.markdown(f'<div class="card-note">Решение по каждому документу показано в результатах ниже.{shown_note}</div>', unsafe_allow_html=True)
 
 
 @st.fragment(run_every=2)  # этот кусок сам обновляется каждые 2 секунды, не трогая форму слева
 def live_view() -> None:
     """Раз в 2 секунды берёт у бэкенда задачи посетителя и рисует шаги, очередь и результаты, когда им есть что показать."""
-    try:
-        jobs = requests.get(f"{API}/jobs", params={"session_id": session_id}, timeout=10).json()
-    except (requests.RequestException, ValueError):
+    jobs = fetch_jobs()
+    if jobs is None:
         st.error("Нет связи с сервером.")
         return
     render_stepper(st.session_state.get("n_files", 0), jobs)
@@ -403,8 +439,12 @@ def live_view() -> None:
         side = (f"{need_fix} {plural(need_fix, 'документ требует', 'документа требуют', 'документов требуют')} исправлений"
                 if need_fix else f"Проверено: {len(done)}")
         st.markdown(f'<div class="sec-head"><span class="sec-title">Результаты</span><span class="sec-side">{side}</span></div>', unsafe_allow_html=True)
-        for job in reversed(done[-MAX_SHOWN:]):
-            result_view(job)
+        r_opened = st.session_state.get("r_open", False)
+        # Свёрнутый список показывает один результат, остальные прокручиваются (высоту задаёт style.py по ключу)
+        with st.container(key="rlist_open" if r_opened else "rlist_closed"):
+            for job in reversed(done[-MAX_SHOWN:]):
+                result_view(job)
+        toggle_button("r_open", len(done), "результаты")
         if need_fix:
             with st.container(key="next_card"):
                 st.markdown(
@@ -415,14 +455,6 @@ def live_view() -> None:
                     ),
                     unsafe_allow_html=True,
                 )
-
-    # Удаляет завершённые задачи этого посетителя вместе с фото; задачи в работе остаются
-    if st.button("Очистить историю", key="clear_hist"):
-        try:
-            requests.delete(f"{API}/jobs", params={"session_id": session_id}, timeout=10)
-        except requests.RequestException:
-            st.error("Нет связи с сервером.")
-        st.rerun()  # полный перезапуск: кнопка отправки узнает, что отправленного больше нет
 
 
 with col_right:

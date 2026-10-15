@@ -1,5 +1,5 @@
 """
-Внешний вид страницы: цвета, шрифт, карточки, шаги, кнопки, светлая и тёмная темы, иконки.
+Внешний вид страницы: цвета, шрифты, сетка, карточки с уголками, шаги, кнопки, светлая и тёмная темы, иконки.
 Логики здесь почти нет: она в app.py. Здесь CSS, набор иконок и скрипт перетаскивания файлов,
 которые app.py подключает одной командой render_header() в начале страницы.
 
@@ -8,10 +8,25 @@
       через st.markdown. Контейнеры с key="..." получают класс st-key-<key>, по нему их и красим.
     - Все цвета лежат переменными в блоке :root. Меняешь цвет там, и он меняется везде.
     - Основная тема тёмная (как в макете). Светлая включается по настройке системы.
+    - Картинки (логотип и папка в шапке) лежат в ui/assets и вставляются в страницу как data-URI: asset_uri("имя").
     - Иконки это SVG-строки в словаре ICONS; svg("имя") вставляет их в HTML.
 """
+import base64
+from pathlib import Path
+
 import streamlit as st
 import streamlit.components.v1 as components
+
+ASSETS = Path(__file__).parent / "assets"
+
+
+def asset_uri(name: str) -> str:
+    """Картинка из ui/assets как data-URI (вставляется прямо в HTML); пустая строка, если файла нет."""
+    path = ASSETS / name
+    if not path.exists():
+        return ""
+    mime = {"webp": "image/webp", "png": "image/png", "jpg": "image/jpeg", "svg": "image/svg+xml"}[path.suffix[1:]]
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
 # Иконки (набор Lucide), рисуются линией текущего цвета текста
 ICONS = {
@@ -43,180 +58,238 @@ def svg(name: str, size: int = 18) -> str:
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
 
 /* ---------- палитра: тёмная тема (основная, как в макете) ----------
    Все цвета меняются здесь, в одном месте. */
 :root {
-    --bg: #0D111B;          /* фон страницы */
-    --card: #151B28;        /* карточки */
-    --field: #101622;       /* поля ввода, зона загрузки, вложенные блоки */
-    --raised: #1B2333;      /* кнопки, строки файлов, плашки */
-    --line: #2A3345;        /* границы */
-    --text: #F1F3FA;
-    --text2: #B2BCD0;       /* второстепенный текст */
-    --muted: #8591AA;       /* подписи */
-    --accent: #6266DC;      /* главная кнопка */
-    --accent-text: #808BFA; /* акцентный текст и иконки */
-    --accent-soft: #222744; /* фон под акцентной иконкой */
-    --ok: #7BCEAE;  --ok-bg: rgba(76, 214, 160, .14);
-    --warn: #E8BC78; --warn-bg: #30291F;
-    --info: #808BFA; --info-bg: #222744;
+    --bg: #09090B;          /* фон страницы */
+    --card: #101113;        /* карточки и поля */
+    --field: #0D0E10;       /* зона загрузки и вложенные блоки */
+    --raised: #17181B;      /* плашки, строки файлов */
+    --line: #212226;        /* границы */
+    --line-hi: #3A3C42;     /* уголки карточек */
+    --grid: rgba(255, 255, 255, .035);
+    --text: #FFFFFD;
+    --title: #F0ECE3;       /* большой заголовок */
+    --text2: #BEBFC1;       /* второстепенный текст */
+    --muted: #868789;       /* подписи */
+    --btn: #1C2C4D;         /* главная кнопка */
+    --btn-text: #FFFFFF;
+    --accent: #1C2C4D;
+    --accent-text: #A9B6EE; /* акцент в тексте и иконках */
+    --accent-soft: #1A2240;
+    --ok: #7BCEAE;  --ok-bg: rgba(76, 214, 160, .13);
+    --warn: #E8BC78; --warn-bg: #2A2419;
+    --info: #A9B6EE; --info-bg: #1A2240;
     --err: #FF8E8E;  --err-bg: rgba(255, 123, 123, .12);
     --bar: var(--accent-text);
-    --shadow: none;
+    --glow: rgba(70, 90, 190, .16);
 }
 
 /* ---------- палитра: светлая тема (включается по настройке системы) ---------- */
 @media (prefers-color-scheme: light) {
     :root {
-        --bg: #F4F5FA; --card: #FFFFFF; --field: #F6F7FB; --raised: #EEF0F7; --line: #DCE0EC;
-        --text: #141826; --text2: #4A5268; --muted: #727A91;
-        --accent: #4F53D8; --accent-text: #4F53D8; --accent-soft: #E6E8FB;
+        --bg: #F4F4F2; --card: #FFFFFF; --field: #FAFAF8; --raised: #EDEDE8; --line: #E3E3DE; --line-hi: #B9B9B2;
+        --grid: rgba(17, 17, 17, .045);
+        --text: #111111; --title: #111111; --text2: #4A4D55; --muted: #6B6F76;
+        --btn: #1A1AE6; --btn-text: #FFFFFF; --accent: #1A1AE6; --accent-text: #1A1AE6; --accent-soft: #E6E6FB;
         --ok: #15805A; --ok-bg: #E3F5EC; --warn: #9A6410; --warn-bg: #FBF1DC;
-        --info: #4F53D8; --info-bg: #E6E8FB; --err: #C23A3A; --err-bg: #FBE7E7;
-        --shadow: 0 1px 2px rgba(20,24,38,.04);
+        --info: #1A1AE6; --info-bg: #E6E6FB; --err: #C23A3A; --err-bg: #FBE7E7;
+        --glow: rgba(26, 26, 230, .08);
     }
 }
 
 /* ---------- базовое ---------- */
 #MainMenu, footer, header, [data-testid="stHeader"], [data-testid="stToolbar"] {display: none !important;}
 [data-testid="stHeaderActionElements"] {display: none;}
-[data-testid="stAppViewContainer"], .stApp {background: var(--bg) !important;}
+/* фон: тонкая сетка и мягкое свечение сверху */
+[data-testid="stAppViewContainer"], .stApp {
+    background:
+        radial-gradient(ellipse 60% 40% at 80% 0%, var(--glow), transparent 70%),
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 64px 64px,
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 64px 64px,
+        var(--bg) !important;}
 [data-testid="stMainBlockContainer"] {max-width: 1160px !important; padding: 0 2rem 2rem !important;}
 .stApp, .stApp p, .stApp label, .stApp li, .stApp small, .stApp input, .stApp textarea,
 .stApp button, .stApp [data-testid="stMarkdownContainer"],
-.stApp span:not([data-testid="stIconMaterial"]) {font-family: 'Inter', sans-serif !important;}
+.stApp span:not([data-testid="stIconMaterial"]) {font-family: 'Manrope', sans-serif !important;}
 .stApp {color: var(--text);}
 [data-testid="stVerticalBlock"] {gap: 1rem;}
 .stApp svg {flex: none;}
+.hero-title, .card-title, .sec-title, .next-t, .page-drop b, .step-ic, .step-t, .brand-tag, .count-pill {font-family: 'Unbounded', 'Arial Black', sans-serif !important;}
 
 /* ---------- верхняя полоса ---------- */
-.topbar {display: flex; align-items: center; gap: 14px; height: 60px;}
-.logo {width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-text);
-       display: grid; place-items: center;}
-.brand {font-size: 1.15rem; font-weight: 500; letter-spacing: -.01em; color: var(--text);}
-.brand-sub {font-size: .8rem; color: var(--muted); border-left: 1px solid var(--line); padding-left: 14px; line-height: 1;}
-.st-key-topbar {position: relative; margin-bottom: 4px;}
+.topbar {display: flex; align-items: center; gap: 14px; height: 36px;}
+.brand-tag {font-size: .68rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); white-space: nowrap;}
+.logo {width: 34px; height: 34px; border: 1px solid var(--line-hi); display: grid; place-items: center; background: var(--raised); color: var(--text);}
+.logo img {width: 22px; height: 23px; display: block;}
+.st-key-topbar {position: relative; margin-bottom: 4px; padding: 12px 0 27px !important;}
 .st-key-topbar::after {content: ""; position: absolute; left: 50%; bottom: 0; width: 100vw; transform: translateX(-50%);
                        border-bottom: 1px solid var(--line);}
 .st-key-topbar [data-testid="stVerticalBlock"] {gap: 0;}
 .st-key-help_btn button {background: transparent !important; border: 0 !important; color: var(--text2) !important;
                          box-shadow: none !important; justify-content: flex-end;}
 .st-key-help_btn button:hover {color: var(--text) !important;}
-.st-key-help_btn {width: 100%; display: flex; justify-content: flex-end;}
+.st-key-help_btn {width: 100%; display: flex; justify-content: flex-end; position: relative; top: 7px;}
 .st-key-help_btn [data-testid="stButton"] {width: auto;}
 
-/* ---------- заголовок страницы ---------- */
-.page-title {font-size: 2rem; font-weight: 400; letter-spacing: -.02em; line-height: 1.2; margin: 28px 0 8px; color: var(--text);}
-.page-sub {color: var(--text2); font-size: .95rem; margin: 0 0 22px;}
+/* ---------- верхний блок: заголовок и папка ---------- */
+.hero {display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 8px 0 14px;}
+.stApp h1.hero-title {font-family: 'Unbounded', 'Arial Black', sans-serif !important; font-size: clamp(1.7rem, 7.4vw, 5.8rem) !important; font-weight: 800 !important;
+             line-height: 1 !important; letter-spacing: -.015em !important; text-transform: uppercase; padding: 0 !important;
+             color: var(--title) !important; margin: 0 0 22px !important; overflow-wrap: anywhere;}
+.page-sub {color: var(--text2); font-size: .95rem; max-width: 520px; line-height: 1.55; margin: 0;}
+.hero-art {flex: none; width: clamp(84px, 20vw, 220px);}
+.hero-art img {width: 100%; height: auto; display: block; filter: drop-shadow(0 18px 40px rgba(0,0,0,.35));}
 
 /* ---------- шаги ---------- */
-.stepper {display: flex; align-items: center; gap: 16px; margin: 0 0 26px;}
-.step {display: flex; align-items: center; gap: 12px; min-width: 0;}
-.step-ic {width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none;
-          background: var(--raised); color: var(--text2);}
-.step.current .step-ic {background: var(--accent-soft); color: var(--accent-text);}
-.step.pending .step-ic {opacity: .6;}
+.stepper {display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 18px 0; border-top: 1px solid var(--line);}
+.step {display: flex; align-items: center; gap: 14px; min-width: 0;}
+.step-ic {width: 28px; height: 28px; border: 1px solid var(--line-hi); display: grid; place-items: center; flex: none;
+          font-size: .62rem; font-weight: 500; color: var(--muted); background: transparent;}
+.step.done .step-ic {color: var(--text2);}
+.step.current .step-ic {border-color: var(--text); color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent);}
+.step.pending .step-ic {opacity: .7;}
 .step-t {font-size: .85rem; font-weight: 600; color: var(--text); line-height: 1.3;}
-.step-s {font-size: .75rem; color: var(--muted); line-height: 1.3;}
+.step-s {font-size: .72rem; color: var(--muted); line-height: 1.3;}
 .step.current .step-s.hl {color: var(--accent-text);}
-.step-line {flex: 1; height: 1px; background: var(--line); min-width: 24px;}
+.step-line {flex: 1; height: 1px; background: var(--line); min-width: 24px; align-self: center;}
 
-/* ---------- карточки ---------- */
-.st-key-upload_card, .card, [class*="st-key-res_"], .st-key-next_card, .st-key-empty_card {
-    background: var(--card); border: 1px solid var(--line) !important; border-radius: 16px;
-    padding: 22px 24px !important; box-shadow: var(--shadow);}
+/* ---------- карточки с уголками ---------- */
+.st-key-upload_card, .card, .st-key-queue_card, [class*="st-key-res_"], .st-key-next_card, .st-key-empty_card {
+    --br: var(--line-hi);
+    border: 1px solid var(--line) !important; border-radius: 0 !important; padding: 22px 24px !important; position: relative;
+    background:
+        linear-gradient(var(--br), var(--br)) left top / 10px 1px no-repeat,
+        linear-gradient(var(--br), var(--br)) left top / 1px 10px no-repeat,
+        linear-gradient(var(--br), var(--br)) right top / 10px 1px no-repeat,
+        linear-gradient(var(--br), var(--br)) right top / 1px 10px no-repeat,
+        linear-gradient(var(--br), var(--br)) left bottom / 10px 1px no-repeat,
+        linear-gradient(var(--br), var(--br)) left bottom / 1px 10px no-repeat,
+        linear-gradient(var(--br), var(--br)) right bottom / 10px 1px no-repeat,
+        linear-gradient(var(--br), var(--br)) right bottom / 1px 10px no-repeat,
+        var(--card) !important;}
 .card {padding: 22px 24px; margin-bottom: 1rem;}
 .card-head {display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;}
-.card-title {font-size: 1.25rem; font-weight: 600; letter-spacing: -.01em; color: var(--text); margin: 0;}
-.card-desc {font-size: .85rem; color: var(--text2); line-height: 1.5; margin: 6px 0 4px;}
-.count-pill {background: var(--raised); color: var(--text2); font-size: .72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px;}
+.card-title {font-size: 1.35rem; font-weight: 700; letter-spacing: -.015em; color: var(--text); margin: 0; line-height: 1.2;}
+.card-desc {font-size: .85rem; color: var(--text2); line-height: 1.5; margin: 8px 0 4px;}
+.count-pill {border: 1px solid var(--line-hi); color: var(--text2); font-size: .68rem; font-weight: 600; padding: 4px 10px; letter-spacing: .04em;}
 .card-note {font-size: .78rem; color: var(--muted); margin-top: 14px;}
 .sec-head {display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 0;}
-.sec-title {font-size: 1.25rem; font-weight: 600; color: var(--text);}
+.sec-title {font-size: 1.35rem; font-weight: 700; letter-spacing: -.015em; color: var(--text);}
 .sec-side {font-size: .8rem; color: var(--muted);}
-.privacy {display: flex; gap: 10px; color: var(--muted); font-size: .75rem; line-height: 1.5; padding: 0 8px;}
+.privacy {display: flex; gap: 10px; color: var(--muted); font-size: .75rem; line-height: 1.5; padding: 0 4px;}
 .privacy svg {margin-top: 2px;}
 
-/* ---------- подписи полей ---------- */
-.stApp label p, [data-testid="stWidgetLabel"] p {font-size: .8rem !important; color: var(--text2) !important; font-weight: 500;}
-.field-label {display: flex; justify-content: space-between; font-size: .8rem; color: var(--text2); font-weight: 500; margin-bottom: 2px; line-height: 1.2;}
-.field-label .opt {color: var(--muted); font-weight: 400;}
+/* ---------- подписи полей: мелкие заглавные ---------- */
+.stApp label p, [data-testid="stWidgetLabel"] p {font-size: .68rem !important; color: var(--muted) !important; font-weight: 600;
+                                                text-transform: uppercase; letter-spacing: .09em;}
+.field-label {display: flex; justify-content: space-between; font-size: .68rem; color: var(--muted); font-weight: 600; margin-bottom: 2px;
+              text-transform: uppercase; letter-spacing: .09em; line-height: 1.2;}
+.field-label .opt {text-transform: none; letter-spacing: 0; font-weight: 500; font-size: .75rem;}
 
 /* ---------- поля ввода ---------- */
 [data-testid="stTextInput"] input, [data-testid="stSelectbox"] [data-baseweb="select"] > div,
-[data-testid="stSelectbox"] [role="group"], [data-testid="stSelectbox"] input {background: var(--field) !important; color: var(--text) !important;}
+[data-testid="stSelectbox"] [role="group"], [data-testid="stSelectbox"] input {background: var(--card) !important; color: var(--text) !important;}
 [data-testid="stTextInput"] > div > div, [data-testid="stSelectbox"] [data-baseweb="select"] > div {
-    background: var(--field) !important; border: 1px solid var(--line) !important; border-radius: 10px !important;}
+    background: var(--card) !important; border: 1px solid var(--line-hi) !important; border-radius: 0 !important;}
+[data-testid="stSelectbox"] [data-baseweb="select"], [data-testid="stSelectbox"] [data-baseweb="select"] *, [data-testid="stTextInput"] [data-baseweb] {border-radius: 0 !important;}
 [data-testid="stTextInput"] input::placeholder {color: var(--muted);}
 
 /* ---------- зона загрузки ---------- */
 [data-testid="stFileUploaderDropzone"] {
-    background: var(--field); border: 1.5px dashed var(--line); border-radius: 14px; padding: 28px 16px;
+    background: var(--field); border: 1px dashed var(--line-hi); border-radius: 0; padding: 28px 16px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; cursor: pointer;}
-[data-testid="stFileUploaderDropzone"]:hover {border-color: var(--accent-text);}
+[data-testid="stFileUploaderDropzone"]:hover {border-color: var(--text2);}
 /* настоящую кнопку и английские подписи прячем: клик по всей зоне и так открывает окно выбора файлов */
 [data-testid="stFileUploaderDropzone"] > span {display: none;}
 [data-testid="stFileUploaderDropzoneInstructions"] > div {display: none;}
 [data-testid="stFileUploaderDropzoneInstructions"] {
-    display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 44px; position: relative;
-    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23808BFA' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M12 13v8'/><path d='M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242'/><path d='m8 17 4-4 4 4'/></svg>") top center / 32px no-repeat;}
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 40px; position: relative;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24' fill='none' stroke='%23BEBFC1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='17 8 12 3 7 8'/><line x1='12' x2='12' y1='3' y2='15'/></svg>") top center / 26px no-repeat;}
 [data-testid="stFileUploaderDropzoneInstructions"]::before {content: "Перетащите файлы сюда"; color: var(--text); font-size: .85rem; font-weight: 500;}
-[data-testid="stFileUploaderDropzoneInstructions"]::after {content: "или выберите на устройстве"; color: var(--accent-text); font-size: .8rem; font-weight: 500;}
+[data-testid="stFileUploaderDropzoneInstructions"]::after {content: "или выберите на устройстве"; color: var(--text); font-size: .8rem; font-weight: 500;
+    text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line-hi);}
 /* когда файлы выбраны, Streamlit показывает их внутри зоны: оформляем как строки списка */
 [data-testid="stFileUploaderDropzone"]:has([data-testid="stFileChips"]) {padding: 10px; align-items: stretch; text-align: left; cursor: default;}
 [data-testid="stFileChips"], [data-testid="stFileChips"] * {text-align: left;}
 [data-testid="stFileChips"] > div {display: flex; flex-direction: column; align-items: stretch; gap: 8px;}
 [data-testid="stFileChips"] > div > div {display: flex; flex-direction: column; gap: 8px;}
 [data-testid="stFileChip"] {display: flex !important; align-items: center; gap: 12px; background: var(--raised) !important;
-                            border: 0; border-radius: 10px !important; padding: 10px 12px !important; width: 100%;}
-[data-testid="stFileChip"] > div:first-child {width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft) !important;
+                            border: 1px solid var(--line); border-radius: 0 !important; padding: 10px 12px !important; width: 100%;}
+[data-testid="stFileChip"] > div:first-child {width: 34px; height: 34px; border-radius: 0; background: var(--card) !important; border: 1px solid var(--line-hi);
                                               display: grid; place-items: center; flex: none;}
-[data-testid="stFileChip"] > div:first-child svg {color: var(--accent-text); fill: var(--accent-text);}
+[data-testid="stFileChip"] > div:first-child svg {color: var(--text2); fill: var(--text2);}
 [data-testid="stFileChip"] > div:nth-child(2) {flex: 1; min-width: 0;}
 [data-testid="stFileChipName"] {color: var(--text) !important; font-size: .82rem; font-weight: 600; text-align: left !important; overflow: hidden; text-overflow: ellipsis;}
 [data-testid="stFileChip"] small, [data-testid="stFileChip"] div div + div {color: var(--muted); font-size: .72rem;}
-[data-testid="stBaseButton-borderlessIcon"] {align-self: flex-start; background: transparent; color: var(--accent-text);}
+[data-testid="stBaseButton-borderlessIcon"] {align-self: flex-start; background: transparent; color: var(--text2);}
 .upload-count {font-size: .75rem; color: var(--muted);}
 .st-key-clear_files {width: 100%; display: flex; justify-content: flex-end;}
 .st-key-clear_files [data-testid="stButton"] {width: auto;}
 .st-key-clear_files button {padding: 0 !important; min-height: 0 !important;}
-.st-key-clear_files button p {font-size: .75rem !important; color: var(--muted) !important;}
+.st-key-clear_files button p {font-size: .75rem !important; color: var(--muted) !important; text-transform: none !important; letter-spacing: 0 !important;}
 
 /* ---------- кнопки ---------- */
 [data-testid="stBaseButton-secondary"] {
-    background: var(--raised); border: 1px solid var(--line); color: var(--text) !important; border-radius: 10px;
+    background: transparent; border: 1px solid var(--line-hi); color: var(--text) !important; border-radius: 0;
     min-height: 44px; font-weight: 500; width: 100%; box-shadow: none;}
-[data-testid="stBaseButton-secondary"]:hover {border-color: var(--accent-text); background: var(--raised);}
+[data-testid="stBaseButton-secondary"]:hover {border-color: var(--text); background: color-mix(in srgb, var(--text) 5%, transparent);}
 [data-testid="stBaseButton-secondary"] p {color: var(--text) !important; font-size: .85rem !important;}
-/* неактивная: пунктирная рамка и приглушённый текст, чтобы было видно, что кнопка временно недоступна */
-[data-testid="stBaseButton-secondary"]:disabled {
-    opacity: 1; cursor: not-allowed; background: transparent; border: 1px dashed var(--line);}
-[data-testid="stBaseButton-secondary"]:disabled p, [data-testid="stBaseButton-secondary"]:disabled span {color: var(--muted) !important;}
-[data-testid="stBaseButton-primary"] {background: var(--accent); border: 0; border-radius: 10px; color: #fff !important; font-weight: 600;}
-[data-testid="stBaseButton-primary"] p {color: #fff !important;}
+/* главная кнопка отправки: залитая; неактивная: пунктир и приглушённый текст, чтобы было видно, что она временно недоступна */
+.st-key-send_btn [data-testid="stBaseButton-secondary"] {background: var(--btn); border-color: var(--btn); color: var(--btn-text) !important;}
+.st-key-send_btn [data-testid="stBaseButton-secondary"] p, .st-key-send_btn [data-testid="stBaseButton-secondary"] span {color: var(--btn-text) !important;}
+.st-key-send_btn [data-testid="stBaseButton-secondary"]:hover {filter: brightness(1.15); background: var(--btn);}
+[data-testid="stBaseButton-secondary"]:disabled, .st-key-send_btn [data-testid="stBaseButton-secondary"]:disabled {
+    opacity: 1; cursor: not-allowed; background: transparent; border: 1px dashed var(--line-hi); filter: none;}
+[data-testid="stBaseButton-secondary"]:disabled p, [data-testid="stBaseButton-secondary"]:disabled span,
+.st-key-send_btn [data-testid="stBaseButton-secondary"]:disabled p, .st-key-send_btn [data-testid="stBaseButton-secondary"]:disabled span {color: var(--muted) !important;}
+[data-testid="stBaseButton-primary"] {background: var(--btn); border: 0; border-radius: 0; color: var(--btn-text) !important; font-weight: 600;}
+[data-testid="stBaseButton-primary"] p {color: var(--btn-text) !important;}
 .st-key-send_btn, .st-key-resend_btn, .st-key-send_btn [data-testid="stButton"], .st-key-resend_btn [data-testid="stButton"] {width: 100%;}
-.st-key-help_btn [data-testid="stBaseButton-secondary"], .st-key-clear_files [data-testid="stBaseButton-secondary"],
-.st-key-clear_hist [data-testid="stBaseButton-secondary"] {width: auto; min-height: 0; background: transparent; border: 0;}
-.st-key-clear_hist {display: flex; justify-content: flex-end;}
-.st-key-clear_hist button p {color: var(--muted) !important; font-size: .78rem !important;}
+.st-key-help_btn [data-testid="stBaseButton-secondary"], .st-key-clear_files [data-testid="stBaseButton-secondary"] {width: auto; min-height: 0; background: transparent; border: 0;}
+.st-key-clear_hist {margin-top: 6px;}
+.st-key-clear_hist, .st-key-clear_hist [data-testid="stButton"] {width: 100%;}
+.st-key-clear_hist [data-testid="stBaseButton-secondary"] {width: 100%; min-height: 40px; background: transparent; border: 1px solid var(--line-hi);}
+.st-key-clear_hist [data-testid="stBaseButton-secondary"]:hover:not(:disabled) {border-color: var(--text2);}
+.st-key-clear_hist button p, .st-key-clear_hist button span {color: var(--text2) !important; font-size: .82rem !important;}
+.st-key-clear_hist button:disabled p, .st-key-clear_hist button:disabled span {color: var(--muted) !important;}
+
+/* ---------- очередь и результаты: свёрнутый список показывает один пункт, остальные прокручиваются ---------- */
+.st-key-queue_card [data-testid="stVerticalBlock"] {gap: 0;}
+.st-key-queue_card {gap: 0;}
+.st-key-qlist_open [data-testid="stElementContainer"] ~ [data-testid="stElementContainer"] .qrow {border-top: 1px solid var(--line);}
+.st-key-qlist_closed1 {max-height: 84px; overflow-y: auto; scroll-snap-type: y mandatory;}
+.st-key-qlist_closed2 {max-height: 168px; overflow-y: auto; scroll-snap-type: y mandatory;}
+.st-key-qlist_closed2 [data-testid="stElementContainer"] ~ [data-testid="stElementContainer"] .qrow {border-top: 1px solid var(--line);}
+.st-key-rlist_closed {max-height: 470px; overflow-y: auto; scroll-snap-type: y mandatory; padding-right: 2px;}
+.st-key-qlist_closed1 [data-testid="stElementContainer"], .st-key-qlist_closed2 [data-testid="stElementContainer"], .st-key-rlist_closed > [data-testid="stVerticalBlock"] > * {scroll-snap-align: start;}
+.st-key-qlist_closed1, .st-key-qlist_closed2, .st-key-rlist_closed {scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;}
+.st-key-rlist_open [data-testid="stVerticalBlock"], .st-key-rlist_closed [data-testid="stVerticalBlock"] {gap: 1rem;}
+/* кнопка «Показать все» / «Свернуть»: спокойная, на всю ширину блока */
+.st-key-q_open_btn, .st-key-r_open_btn {margin-top: 10px;}
+.st-key-q_open_btn, .st-key-r_open_btn, .st-key-q_open_btn [data-testid="stButton"], .st-key-r_open_btn [data-testid="stButton"] {width: 100%;}
+.st-key-q_open_btn button, .st-key-r_open_btn button {width: 100%; min-height: 38px; background: transparent !important; border: 1px solid var(--line) !important;}
+.st-key-q_open_btn button p, .st-key-r_open_btn button p, .st-key-q_open_btn button span, .st-key-r_open_btn button span {color: var(--text2) !important; font-size: .8rem !important;}
+.st-key-q_open_btn button:hover, .st-key-r_open_btn button:hover {border-color: var(--text2) !important;}
 
 /* ---------- очередь ---------- */
-.qrow {display: grid; grid-template-columns: 44px 1fr auto; gap: 4px 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line);}
-.qrow:first-of-type {border-top: 0; padding-top: 4px;}
-.qicon {width: 44px; height: 44px; border-radius: 12px; background: var(--raised); color: var(--text2); display: grid; place-items: center;}
+.qrow {display: grid; grid-template-columns: 44px 1fr auto; gap: 4px 14px; align-items: center; align-content: center; padding: 6px 0; box-sizing: border-box; min-height: 84px;}
+.st-key-queue_card [data-testid="stMarkdownContainer"]:has(.qrow) {margin-bottom: 0 !important;}
+.qicon {width: 44px; height: 44px; border: 1px solid var(--line-hi); color: var(--text2); display: grid; place-items: center;}
 .qname {font-size: .9rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere;}
 .qsub {font-size: .75rem; color: var(--muted);}
 .qside {display: flex; flex-direction: column; align-items: flex-end; gap: 6px;}
 .qstat {font-size: .75rem; color: var(--muted);}
-.pill {display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; white-space: nowrap;}
+.pill {display: inline-flex; align-items: center; gap: 6px; font-size: .68rem; font-weight: 700; padding: 4px 10px; white-space: nowrap;
+       text-transform: uppercase; letter-spacing: .06em;}
 .pill.done {color: var(--ok); background: var(--ok-bg);}
 .pill.processing {color: var(--info); background: var(--info-bg);}
 .pill.queued {color: var(--text2); background: var(--raised);}
 .pill.error {color: var(--err); background: var(--err-bg);}
-.qbar {grid-column: 1 / -1; height: 6px; border-radius: 999px; background: var(--raised); overflow: hidden;}
-.qbar span {display: block; height: 100%; border-radius: 999px; background: var(--bar); transition: width .6s ease;}
+.qbar {grid-column: 1 / -1; height: 4px; background: var(--raised); overflow: hidden;}
+.qbar span {display: block; height: 100%; background: var(--bar); transition: width .6s ease;}
 .qrow.processing .qbar span {background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.22) 0 8px, transparent 8px 16px);
     background-size: 22.6px 22.6px; animation: bar-move 1s linear infinite;}
 @keyframes bar-move {to {background-position: 22.6px 0;}}
@@ -229,9 +302,9 @@ CSS = """
 /* ---------- результаты ---------- */
 .rhead {display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;}
 .rname {display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: .95rem; color: var(--text); overflow-wrap: anywhere;}
-.rname svg {color: var(--accent-text);}
+.rname svg {color: var(--text2);}
 .rtag {font-size: .75rem; color: var(--muted); white-space: nowrap;}
-.verdict {display: flex; gap: 12px; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;}
+.verdict {display: flex; gap: 12px; padding: 16px 18px; margin-bottom: 16px; border-left: 3px solid currentColor;}
 .verdict svg {margin-top: 2px;}
 .verdict b {display: block; font-size: 1rem; font-weight: 600; margin-bottom: 4px;}
 .verdict span {font-size: .82rem; color: var(--text2); line-height: 1.5;}
@@ -239,22 +312,22 @@ CSS = """
 .verdict.ok {background: var(--ok-bg); color: var(--ok);}
 .verdict.no_answer {background: var(--info-bg); color: var(--info);}
 .issue {display: flex; gap: 14px; margin: 14px 0;}
-.issue-ic {width: 28px; height: 28px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); display: grid; place-items: center; flex: none;}
+.issue-ic {width: 28px; height: 28px; background: var(--warn-bg); color: var(--warn); display: grid; place-items: center; flex: none;}
 .issue b {display: block; font-size: .9rem; font-weight: 600; color: var(--text);}
 .issue span {font-size: .82rem; color: var(--text2);}
-.source {display: flex; align-items: center; gap: 10px; background: var(--field); border-radius: 10px; padding: 12px 14px; margin-top: 16px;
+.source {display: flex; align-items: center; gap: 10px; background: var(--field); border: 1px solid var(--line); padding: 12px 14px; margin-top: 16px;
          font-size: .82rem; color: var(--text2);}
-.source a {margin-left: auto; color: var(--accent-text); display: flex;}
+.source a {margin-left: auto; color: var(--text2); display: flex;}
 [class*="st-key-res_"] [data-testid="stExpander"] details {background: transparent; border: 0;}
 [class*="st-key-res_"] [data-testid="stExpander"] summary {padding-left: 0; color: var(--text2);}
-[class*="st-key-res_"] [data-testid="stExpander"] summary p {font-size: .8rem !important;}
+[class*="st-key-res_"] [data-testid="stExpander"] summary p {font-size: .8rem !important; text-transform: none !important; letter-spacing: 0 !important;}
 
 /* ---------- «что делать дальше» ---------- */
-.next-t {font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 6px;}
+.next-t {font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 6px;}
 .next-p {font-size: .85rem; color: var(--text2); margin-bottom: 16px;}
-.cta {display: inline-flex; align-items: center; gap: 10px; background: var(--accent); color: #fff !important; text-decoration: none !important;
-      font-weight: 600; font-size: .85rem; padding: 12px 18px; border-radius: 10px;}
-.cta:hover {filter: brightness(1.1);}
+.cta {display: inline-flex; align-items: center; gap: 10px; background: var(--btn); color: var(--btn-text) !important; text-decoration: none !important;
+      font-weight: 600; font-size: .85rem; padding: 12px 18px;}
+.cta:hover {filter: brightness(1.15);}
 
 /* ---------- подвал ---------- */
 .footer {display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 28px; padding-top: 22px;
@@ -271,20 +344,21 @@ CSS = """
 [data-testid="stMainBlockContainer"] {transition: filter .2s ease;}
 body.page-drop-active [data-testid="stMainBlockContainer"] {filter: blur(8px) brightness(.75);}
 .page-drop {position: fixed; inset: 14px; z-index: 1000000; pointer-events: none; opacity: 0;
-            border: 2px dashed var(--accent-text); border-radius: 28px; transition: opacity .2s ease;
+            border: 1px dashed var(--text); transition: opacity .2s ease;
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-            background: color-mix(in srgb, var(--accent-text) 10%, transparent);}
+            background: color-mix(in srgb, var(--text) 6%, transparent);}
 body.page-drop-active .page-drop {opacity: 1;}
-.page-drop b {font-size: 1.8rem; font-weight: 400; color: var(--text);}
+.page-drop b {font-size: 1.6rem; font-weight: 600; color: var(--text);}
 .page-drop span {font-size: .95rem; color: var(--muted);}
 /* невидимый iframe со скриптом не должен занимать место в странице */
 [data-testid="stElementContainer"]:has(iframe[height="0"], [data-testid="stIFrame"]) {position: absolute; height: 0; margin: 0; overflow: hidden;}
 
-/* ---------- узкий экран: колонки встают друг под друга ---------- */
+/* ---------- узкий экран ---------- */
 @media (max-width: 800px) {
     [data-testid="stMainBlockContainer"] {padding: 0 1rem 2rem !important;}
+    .hero {gap: 12px; padding: 12px 0;}
+    .hero-art {width: 26vw;}
     .stepper {flex-direction: column; align-items: flex-start;} .step-line {display: none;}
-    .brand-sub {display: none;}
 }
 </style>
 """
@@ -341,8 +415,30 @@ PAGE_DROP_JS = """
 """
 
 
+_RANGES = {
+    "cyrillic": "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116",
+    "latin": "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215",
+}
+
+
+def font_css() -> str:
+    """Шрифт Unbounded для заголовков: файлы лежат в ui/assets/fonts и вставляются в страницу, интернет для них не нужен."""
+    faces = []
+    for weight in (700, 800):
+        for subset, ranges in _RANGES.items():
+            path = ASSETS / "fonts" / f"unbounded-{subset}-{weight}-normal.woff2"
+            if path.exists():
+                data = base64.b64encode(path.read_bytes()).decode()
+                faces.append(
+                    f"@font-face {{font-family: 'Unbounded'; font-weight: {weight}; font-style: normal; font-display: swap; "
+                    f"src: url(data:font/woff2;base64,{data}) format('woff2'); unicode-range: {ranges};}}"
+                )
+    return "<style>" + "".join(faces) + "</style>"
+
+
 def render_header() -> None:
     """Подключает стили и скрипт перетаскивания файлов на всю страницу."""
+    st.markdown(font_css(), unsafe_allow_html=True)
     st.markdown(CSS, unsafe_allow_html=True)
     if hasattr(st, "iframe"):  # components.html объявлен устаревшим, в новых версиях Streamlit его заменяет st.iframe
         st.iframe(PAGE_DROP_JS, height=1)
