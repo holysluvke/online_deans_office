@@ -69,8 +69,8 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "Мельников Денис Игоревич",
-        "university": "Учебная академия «Горизонт»",
-        "program": "09.03.01 Информатика и вычислительная техника",
+        "university": "Учебная академия«Горизонт»",
+        "program": "О9.03.01 Информатика и вычислительная техника",
         "study_form": "очно-заочная",
         "study_start": "2022-09-01",
         "study_end": "2026-08-31",
@@ -190,7 +190,7 @@
       "fields": {
         "student_name": "Климов Борис Дмитриевич",
         "university": "Учебный университет «Меридиан»",
-        "program": "09.03.01 Информатика и вычислительная техника",
+        "program": "О9.о3.01 Информатика и вычислительная техника",
         "study_form": "очно-заочная",
         "study_start": "2023-09-01",
         "study_end": "2026-08-31",
@@ -250,8 +250,8 @@
       "document_type": "study_certificate",
       "fields": {
         "student_name": "не найдено",
-        "university": "Учебная академия «Горизонт»",
-        "program": "09.03.01 Информатика и вычислительная техника",
+        "university": "Учебная академия«Горизонт»",
+        "program": "О9.о3.01 Информатика и вычислительная техника",
         "study_form": "очная",
         "study_start": "2022-09-01",
         "study_end": "2026-08-31",
@@ -732,7 +732,7 @@
       "document_type": "academic_leave_application",
       "fields": {
         "student_name": "Павлов Фёдор Дмитриевич",
-        "group": "ЭК-24-2",
+        "group": "не найдено",
         "course": "4",
         "leave_reason": "по семейным обстоятельствам",
         "leave_start": "2026-11-01",
@@ -743,9 +743,11 @@
       "validation": {
         "status": "missing_fields",
         "missing_fields": [
+          "group",
           "signature_present"
         ],
         "sources": [
+          "rule:4.1",
           "rule:4.2"
         ]
       },
@@ -754,8 +756,9 @@
           "question_id": "open-013-Q1",
           "answerable": true,
           "value": "missing_fields",
-          "answer": "Не хватает следующих сведений: Подпись студента. Основание: пункты 4.2 Положения.",
+          "answer": "Не хватает следующих сведений: Учебная группа, Подпись студента. Основание: пункты 4.1, 4.2 Положения.",
           "sources": [
+            "rule:4.1",
             "rule:4.2"
           ]
         },
@@ -1194,7 +1197,7 @@
       "document_type": "internship_certificate",
       "fields": {
         "student_name": "Данилов Олег Алексеевич",
-        "organization": "Учебная организация «Спектр»",
+        "organization": "Учебная организация «Спектр",
         "internship_start": "2026-06-01",
         "internship_end": "2026-07-15",
         "supervisor_name": "Ильина Елена Андреевна",
@@ -1316,7 +1319,7 @@
       "document_type": "internship_certificate",
       "fields": {
         "student_name": "Шестаков Глеб Дмитриевич",
-        "organization": "Учебная организация «Спектр»",
+        "organization": "Учебная организация «Спектр",
         "internship_start": "2026-06-01",
         "internship_end": "2026-07-15",
         "supervisor_name": "Соколова Анна Викторовна",
@@ -1377,7 +1380,7 @@
       "document_type": "internship_certificate",
       "fields": {
         "student_name": "Шестаков Олег Алексеевич",
-        "organization": "Учебная организация «Спектр»",
+        "organization": "Учебная организация «Спектр",
         "internship_start": "2026-06-01",
         "internship_end": "2026-07-15",
         "supervisor_name": "Ильина Елена Андреевна",
@@ -1618,7 +1621,7 @@
       "document_type": "internship_certificate",
       "fields": {
         "student_name": "Соколов Никита Сергеевич",
-        "organization": "Учебная организация «Спектр»",
+        "organization": "Учебная организация «Спектр",
         "internship_start": "2026-06-01",
         "internship_end": "2026-07-15",
         "supervisor_name": "Соколова Анна Викторовна",
@@ -1652,8 +1655,8 @@
         {
           "question_id": "open-028-Q2",
           "answerable": true,
-          "value": "Учебная организация «Спектр»",
-          "answer": "Название организации: Учебная организация «Спектр».",
+          "value": "Учебная организация «Спектр",
+          "answer": "Название организации: Учебная организация «Спектр.",
           "sources": [
             "field:organization"
           ]
@@ -1740,7 +1743,7 @@
       "document_type": "internship_certificate",
       "fields": {
         "student_name": "Петров Артём Николаевич",
-        "organization": "Учебная организация «Парус»",
+        "organization": "Учебная организация«Парус»",
         "internship_start": "2026-06-01",
         "internship_end": "2026-07-15",
         "supervisor_name": "Кузнецова Мария Сергеевна",
