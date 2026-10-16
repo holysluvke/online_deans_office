@@ -170,11 +170,11 @@ pip install -r requirements.backend.txt -r requirements.ui.txt
 ```
 
 Запуск в двух терминалах (в каждом активируйте окружение), сначала бэкенд:
-
+терминал 1:
 ```bash
 uvicorn backend.main:app --no-access-log
 ```
-
+терминал 2:
 ```bash
 streamlit run ui/app.py
 ```
